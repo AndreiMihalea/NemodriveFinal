@@ -4,10 +4,8 @@ import numpy as np
 import os
 import nemodata
 import matplotlib.pylab as plt
-import skinematics.quat as quat
 
 from util.vis import *
-from squaternion import Quaternion
 from util.transformation import Crop
 
 
@@ -212,13 +210,13 @@ class PKLReader(Reader):
         center_img = cv2.resize(center_img, None, fx=0.3, fy=0.3)
 
         # get rotation
-        vals = packet["sensor_data"]["imu"]["orientation_quaternion"]
-        q = [vals['x'], vals['y'], vals['z'], vals['w']]
-        e = quat.quat2deg(q)
+        # vals = packet["sensor_data"]["imu"]["orientation_quaternion"]
+        # q = [vals['x'], vals['y'], vals['z'], vals['w']]
+        # e = quat.quat2deg(q)
 
         # get speed value km/h
         speed = packet["sensor_data"]["canbus"]["speed"]["value"]
-        return center_img, speed, e[2]
+        return center_img, speed, 0
 
     def get_next_image(self):
         new_packet = self.get_package()

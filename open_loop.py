@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import os
 import argparse
 
-from models.nvidia import *
 from models.resnet import *
 from util.dataset import *
 from util.io import *
@@ -14,12 +13,11 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", type=int, default=12, help="batch size")
-parser.add_argument("--vis_dir", type=str, default="./snapshots", help="visualize directory")
 parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
 parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
 parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
 parser.add_argument("--use_old", action="store_true", help="use old dataset")
-parser.add_argument("--load_model", type=int, help="checkpoint name", default=None)
+parser.add_argument("--load_model", type=str, help="checkpoint name", default=None)
 parser.add_argument("--model", type=str, help="[resnet]", default="resnet")
 args = parser.parse_args()
 

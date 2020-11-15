@@ -81,13 +81,13 @@ class AugmentationEvaluator:
 
     def reset(self):
         self.packet = self.reader.get_next_image()
-        frame, speed, _ = self.packet
-
+        frame, speed, real_course = self.packet
+        
         # process frame
         frame = self.reader.crop_car(frame)
         frame = self.reader.crop_center(frame)
         frame = self.reader.resize_img(frame)
-        return frame, speed
+        return frame, speed, real_course
 
     def step(self, predicted_course=0.):
         """
@@ -96,7 +96,7 @@ class AugmentationEvaluator:
         """
         next_packet = self.reader.get_next_image()
         if len(next_packet[0]) == 0:
-            return np.array([]), None
+            return np.array([]), None, None
 
         # compute steering from course, speed, dt
         frame, speed, rel_course = self.packet
@@ -115,23 +115,23 @@ class AugmentationEvaluator:
 
         # append intervention points
         if interv:
-            frame, speed, _ = self.packet
+            frame, speed, rel_course = self.packet
             frame = self.reader.crop_car(frame)
             frame = self.reader.crop_center(frame)
             frame = self.reader.resize_img(frame)
-            return frame, speed
+            return frame, speed, rel_course
 
         # update the frame with the simulated one
         self.packet = (next_sim_frame, *self.packet[1:])
 
         # update the new view
-        frame, speed, _ = self.packet
+        frame, speed, rel_course = self.packet
 
         # process the image
         frame = self.reader.crop_car(frame)
         frame = self.reader.crop_center(frame)
         frame = self.reader.resize_img(frame)
-        return frame, speed
+        return frame, speed, rel_course
 
     @property
     def video_length(self):
@@ -166,7 +166,7 @@ if __name__ == "__main__":
         predicted_course = -0.1 * np.random.rand(1)[0]
 
         # get next frame corresponding to current prediction
-        frame, speed = augm.step(predicted_course)
+        frame, speed, _ = augm.step(predicted_course)
         if frame.size == 0:
             break
 

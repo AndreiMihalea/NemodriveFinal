@@ -78,3 +78,4 @@ def visualisation(img, course, softmax_output, num_vis, path):
     snapshot = np.concatenate(figs, axis=0)
     pil_snapshots = pil.fromarray(snapshot.astype(np.uint8))
     pil_snapshots.save(path)
+    return snapshot

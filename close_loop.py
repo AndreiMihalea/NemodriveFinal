@@ -22,12 +22,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--begin', type=int, help="starting video index", default=0)
 parser.add_argument('--end', type=int, help="ending video index", default=81)
 parser.add_argument('--model', type=str, help='nvidia or resnet', default='nvidia')
-parser.add_argument('--log_dir', type=str, help='simulation dir', default='sim_dir')
-parser.add_argument('--vis_dir', type=str, help='checkpoints dir', default='snapshots')
 parser.add_argument('--load_model', type=str, help='name of the model', default='default')
+parser.add_argument('--use_speed', action='store_true', help='use speed of the vehicle')
 parser.add_argument('--use_old', action='store_true', help="use old dataset")
 parser.add_argument('--split_path', type=str, help='path to the file containing the test scenes (test_scenes.txt)')
 parser.add_argument('--data_path', type=str, help='path to the directory of raw dataset (.mov & .json)')
+parser.add_argument('--sim_dir', type=str, help='simulation directory', default='simulation')
 args = parser.parse_args()
 
 # set seed
@@ -49,13 +49,13 @@ experiment += "resnet"
 model = model.to(device)
 
 # load model
-path = os.path.join("ckpts", args.load_model, "ckpts", "default.pth")
+path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
 load_ckpt(path, [('model', model)])
 model.eval()
 
-# construct logs dirs
-if not os.path.exists(args.log_dir):
-    os.mkdir(args.log_dir)
+# construct simulation dirs
+if not os.path.exists(args.sim_dir):
+    os.mkdir(args.sim_dir)
 
 
 # construct gaussian distribution
@@ -130,8 +130,8 @@ def make_prediction(frame, speed):
 def test_video(root_dir: str, metadata: str, time_penalty=6,
                translation_threshold=1.5, rotation_threshold=0.2, verbose=True):
 
-
-    log_path = os.path.join(args.log_dir, args.load_model, metadata)
+    scene = metadata.split('.')[0]
+    log_path = os.path.join(args.sim_dir, args.load_model, scene)
     if not os.path.exists(log_path):
         os.makedirs(log_path)
         os.makedirs(os.path.join(log_path, "imgs"))
@@ -160,17 +160,18 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     )
 
     # get first two frames of the video and make a prediction
-    frame, speed = augm.reset()
+    frame, speed, real_course = augm.reset()
 
     with torch.no_grad():
         for idx in itertools.count():
-            pred_course, toutput = make_prediction(frame, speed)
-            next_frame, speed, real_course = augm.step(pred_course)
-
             # video is done
             if frame.size == 0:
                 break
-
+            
+            frame = frame[..., ::-1] # BGR to RGB
+            pred_course, toutput = make_prediction(frame, speed)
+            next_frame, next_speed, next_real_course = augm.step(pred_course)
+            
             if real_course is not None:
                 # distribution for the ground truth course
                 real_course_distribution = gaussian_distribution(10 * (real_course + 20))
@@ -186,7 +187,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
                 # construct full image
                 real_course_distribution = torch.tensor(real_course_distribution).unsqueeze(0)
-                imgs_path = os.path.join(args.log_dir, args.load_model, metadata, "imgs", str(idx).zfill(5) + ".png")
+                imgs_path = os.path.join(args.sim_dir, args.load_model, scene, "imgs", str(idx).zfill(5) + ".png")
                 full_img = visualisation(process_frame(frame), real_course_distribution, toutput, 1,
                                          imgs_path).astype(np.uint8)
 
@@ -198,13 +199,15 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
             # update frame
             frame = next_frame
+            real_course = next_real_course
+            speed = next_speed
 
     # get some statistics [mean distance till an intervention, mean angle till an intervention]
     statistics = augm.statistics
     absolute_mean_distance, absolute_mean_angle, plot_dist_ang = plot_statistics(statistics)
 
     # save stats plot
-    stats_path = os.path.join(args.log_dir, args.load_model, metadata, "stats.png")
+    stats_path = os.path.join(args.sim_dir, args.load_model, scene, "stats.png")
     cv2.imwrite(stats_path, plot_dist_ang[..., ::-1])
 
     # save all data
@@ -219,7 +222,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         "statistics": statistics,
     }
 
-    data_path = os.path.join(args.log_dir, args.load_model, metadata, "data.pkl")
+    data_path = os.path.join(args.sim_dir, args.load_model, scene, "data.pkl")
     with open(data_path, 'wb') as fout:
         pkl.dump(data, fout)
 
@@ -228,8 +231,9 @@ if __name__ == "__main__":
     with open(args.split_path, 'rt') as fin:
         files = fin.read()
 
-    files = files.split("\n")
-    files = [file + ".json" for file in files]
+    files = files.strip().split("\n")
+    if args.use_old:
+        files = [file + ".json" for file in files]   
     files = files[args.begin:args.end]
 
     # test video

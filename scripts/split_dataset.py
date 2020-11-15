@@ -22,8 +22,8 @@ if __name__ == "__main__":
 
     train_scenes = set(train_scenes.split("\n"))
     test_scenes = set(test_scenes.split("\n"))
-    # assert train_scenes.intersection(test_scenes) == set(), \
-    #     "There is an overlap between the train and test scenes"
+    assert train_scenes.intersection(test_scenes) == set(), \
+        "There is an overlap between the train and test scenes"
 
     # define paths
     path = os.path.join("../dataset/", "old_dataset" if args.use_old else "new_dataset")
