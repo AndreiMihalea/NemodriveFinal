@@ -1,37 +1,31 @@
-import torch
+import random
 import torch.nn
 import torch.optim as optim
-import torch.nn.functional as F
-from tensorboardX import SummaryWriter
-
-import matplotlib.pyplot as plt
 import argparse
-import os
+import json
 
 from models.resnet import *
-from util.dataset import *
 from util.vis import *
 from util.io import *
 from util.early import *
 
 from tqdm import tqdm
-import numpy as np
-import random
+from tensorboardX import SummaryWriter
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--lr", type=float, default=1e-5, help="learning rate")
+parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs")
 parser.add_argument("--step_size", type=int, default=5, help="scheduler learning rate step size")
 parser.add_argument("--batch_size", type=int, default=128, help="batch size")
+parser.add_argument("--optimizer", type=str, default="adam", help="optimizer available: adam, rmsprop")
 parser.add_argument("--log_interval", type=int, default=50, help="number of batches to log after")
 parser.add_argument("--vis_interval", type=int, default=500, help="number of batches to visualize after")
 parser.add_argument("--save_interval", type=int, default=1, help="number of epoch to save the model after")
 parser.add_argument("--log_dir", type=str, default="./logs", help="logging directory")
 parser.add_argument("--vis_dir", type=str, default="./snapshots", help="visualize directory")
-parser.add_argument("--optimizer", type=str, default="adam", help="optimizer available: adam, rmsprop")
 parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
 parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
-parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs")
 parser.add_argument("--num_vis", type=int, default=4, help="number of visualizations")
 parser.add_argument("--use_augm", action="store_true", help="use augmentation dataset")
 parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
@@ -41,6 +35,8 @@ parser.add_argument("--load_model", type=str, help="checkpoint name", default=No
 parser.add_argument("--model", type=str, default="resnet", help="more to be added [resnet]")
 parser.add_argument("--patience", type=int, default=2, help="early stopping patience")
 parser.add_argument("--weight_decay", type=float, default=0, help="weight decay optimizer")
+parser.add_argument("--finetune", action="store_true", help="flag for finetunning")
+parser.add_argument("--lr_ft", type=float, default=1e-6, help="learning rate for finetunning")
 args = parser.parse_args()
 
 # set seed
@@ -53,33 +49,28 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # define model
 nbins=401
-experiment = "resnet"
 model = RESNET(
 	no_outputs=nbins,
 	use_speed=args.use_speed
 ).to(device)
 
-if args.use_speed:
-	experiment += "_speed"
-
-if args.use_augm:
-	experiment += "_augm"
-
-if args.use_old:
-	experiment += "_old"
-else:
-	experiment += "_new"
 
 # define criterion
 criterion = nn.KLDivLoss(reduction="batchmean")
 
 # define optimizer
 if args.optimizer == "adam":
-	optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-					lr=args.lr, weight_decay=args.weight_decay)
+	optimizer = optim.Adam(
+		filter(lambda p: p.requires_grad, model.parameters()),
+		lr=args.lr_ft if args.finetune else args.lr,
+		weight_decay=args.weight_decay
+	)
 else:
-	optimizer = optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()),
-					lr=args.lr, weight_decay=args.weight_decay)
+	optimizer = optim.RMSprop(
+		filter(lambda p: p.requires_grad, model.parameters()),
+		lr=args.lr_ft if args.finetune else args.lr,
+		weight_decay=args.weight_decay
+	)
 
 # learning rate scheduler
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
@@ -109,7 +100,6 @@ if args.use_balance:
 		pin_memory=True
 	)
 
-	experiment += "_balance"
 else:
 	train_dataloader = DataLoader(
 		train_dataset, 
@@ -134,12 +124,19 @@ if not os.path.exists(args.log_dir):
 if not os.path.exists(args.vis_dir):
 	os.mkdir(args.vis_dir)
 
+# define experiment name
+experiment = str(len(os.listdir(args.vis_dir))).zfill(5)
+
 if not os.path.exists(os.path.join(args.vis_dir, experiment)):
 	os.makedirs(os.path.join(args.vis_dir, experiment))
 	os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_train"))
 	os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_test"))
 	os.makedirs(os.path.join(args.vis_dir, experiment, "ckpts"))
 
+# save args as json in the experiment folder
+path = os.path.join(args.vis_dir, experiment, "args.txt")
+with open(path, 'w') as fout:
+	json.dump(args.__dict__, fout, indent=2)
 
 # define writer & running loss
 writer = SummaryWriter(os.path.join(args.log_dir, experiment))
@@ -209,6 +206,9 @@ def run_epoch(dataloader, epoch, train_flag=True):
 if __name__ == "__main__":
 	start_epoch = 0
 	best_score = None
+
+	if args.finetune and not args.load_model:
+		raise Exception("Need to load a model for finetunnig")
 
 	if args.load_model:
 		ckpt_name = os.path.join(args.vis_dir, experiment, "ckpts", str(args.load_model) + ".pth")

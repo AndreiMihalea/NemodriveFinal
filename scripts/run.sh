@@ -18,10 +18,10 @@
 ########################################################################
 
 # for the old dataset
-python split_dataset.py \
- --train ../data_split/old_dataset/rand_split/train_scenes.txt \
- --test ../data_split/old_dataset/rand_split/test_scenes.txt \
- --use_old
+# python split_dataset.py \
+#  --train ../data_split/old_dataset/rand_split/train_scenes.txt \
+#  --test ../data_split/old_dataset/rand_split/test_scenes.txt \
+#  --use_old
 
 # for the new dataset
 # python split_dataset.py \

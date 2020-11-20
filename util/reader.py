@@ -1,12 +1,14 @@
-import cv2
-import json
-import numpy as np
 import os
+import cv2
+import utm
+import json
 import nemodata
+import numpy as np
 import matplotlib.pylab as plt
 
 from util.vis import *
 from util.transformation import Crop
+from nemodata.compression import Decompressor
 
 
 class Reader(object):
@@ -15,8 +17,24 @@ class Reader(object):
         self.file = file
         self.frame_rate = frame_rate
 
+        # initial location
+        self.init_northing = None
+        self.init_easting = None
+
+        # location at the current time
+        self.northing = None
+        self.easting = None
+
     def get_next_image(self):
         raise NotImplemented()
+
+    @property
+    def init_location(self):
+        return self.init_northing, self.init_easting
+
+    @property
+    def location(self):
+       return self.northing, self.easting
 
     @property
     def K(self):
@@ -136,6 +154,16 @@ class JSONReader(Reader):
         rel_course = JSONReader.get_relative_course(location['course'], next_location['course'])
         speed = location['speed']
 
+        # # initialize locations
+        # # TODO
+        # if not self.init_northing:
+        #     self.init_northing = location['northing']
+        #     self.init_easting = location['easting']
+        #
+        # # update location
+        # self.northing = location['northing']
+        # self.easting = location['easting']
+
         return frame, speed, rel_course
 
 
@@ -158,11 +186,9 @@ class PKLReader(Reader):
 
     def _create_generator(self):
         dt = int(1.0 / self.frame_rate * 1000)
-        with nemodata.VariableSampleRatePlayer(self.root_dir, min_packet_delay_ms=dt) as player:
-            packet = player.get_next_packet()
-            while packet:
-                yield packet
-                packet = player.get_next_packet()
+        player = nemodata.VariableSampleRatePlayer(self.root_dir, min_packet_delay_ms=dt)
+        player.start()
+        return player.stream_generator()
 
     @property
     def K(self):
@@ -209,7 +235,27 @@ class PKLReader(Reader):
         center_img = packet["images"]["center"]
         center_img = cv2.resize(center_img, None, fx=0.3, fy=0.3)
 
-        # get rotation
+        # read GPS coordinates
+        # TODO
+        # if 'gps' in packet['sensor_data'] and 'RMC' in packet['sensor_data']['gps']:
+        #     lat_N = float(packet['sensor_data']['gps']['RMC'].latitude)
+        #     lon_E = float(packet['sensor_data']['gps']['RMC'].longitude)
+        #
+        #     # transform GPS coordinates to UTM (northing, easting)
+        #     easting, northing, _, _ = utm.from_latlon(latitude=lat_N, longitude=lon_E)
+        #
+        #     # initialize the location
+        #     if not self.init_northing:
+        #         self.init_northing = northing
+        #         self.init_easting = easting
+        #
+        #     # update northing & easting
+        #     self.northing = northing
+        #     self.easting = easting
+        #
+        #     print(f'Northing: {self.northing}, Easting: {self.easting}')
+
+        # # get rotation
         # vals = packet["sensor_data"]["imu"]["orientation_quaternion"]
         # q = [vals['x'], vals['y'], vals['z'], vals['w']]
         # e = quat.quat2deg(q)
@@ -229,16 +275,16 @@ class PKLReader(Reader):
         img = self.prev_packet[0]
         speed = self.prev_packet[1]
 
-        # # plotter
-        # dist = gaussian_dist(200 + 10 * rel_course)
-        # fig = plt.figure()
-        # plt.plot(dist)
-        # course_img = np.asarray(fig2img(fig, img.shape[1], img.shape[0]))
-        # plt.close(fig)
-        # full_img = np.concatenate([img, course_img], axis=1)
-        # print("speed", speed, "rel_course", rel_course)
-        # cv2.imshow("FULL", full_img)
-        # cv2.waitKey(0)
+        # plotter
+        dist = gaussian_dist(200 + 10 * rel_course)
+        fig = plt.figure()
+        plt.plot(dist)
+        course_img = np.asarray(fig2img(fig, img.shape[1], img.shape[0]))
+        plt.close(fig)
+        full_img = np.concatenate([img, course_img], axis=1)
+        print("speed", speed, "rel_course", rel_course)
+        cv2.imshow("FULL", full_img)
+        cv2.waitKey(0)
 
         self.prev_packet = new_packet
         return img, speed, rel_course
@@ -261,6 +307,7 @@ if __name__ == "__main__":
         if x[0].size == 0:
             break
 
-        # print("speed:", x[1], "rel_course:", x[2])
+        print("speed:", x[1], "rel_course:", x[2])
         # cv2.imshow("Center image", x[0])
         # cv2.waitKey(0)
+        # print("==========")

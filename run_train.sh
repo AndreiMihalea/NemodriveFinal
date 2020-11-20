@@ -16,7 +16,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 # train model using 2D persepctive augmentation and append speed
 echo $MODEL" + SPEED + BALANCE + AUG"
-python3 train.py \
+python3.6 train.py \
 	--model $MODEL\
 	--batch_size $BATCH_SIZE \
 	--vis_int $VIS_INT \

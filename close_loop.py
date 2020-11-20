@@ -35,7 +35,7 @@ torch.manual_seed(0)
 np.random.seed(0)
 random.seed(0)
 
-# get available divice
+# get available device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # define model
