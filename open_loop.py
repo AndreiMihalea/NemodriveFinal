@@ -89,6 +89,10 @@ if __name__ == "__main__":
 
 	if not os.path.exists("./results"):
 		os.mkdir("./results")
+        
+	path = os.path.join("./results", args.load_model)
+    	if not os.path.exists(path):
+        	os.makedirs(path)
 
-	with open(os.path.join("results", args.load_model), "wb") as fout:
+	with open(os.path.join(path, "open_loop.pkl"), "wb") as fout:
 		pkl.dump(results, fout)

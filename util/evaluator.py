@@ -35,7 +35,7 @@ class AugmentationEvaluator:
         self.T = np.eye(3)
 
     @staticmethod
-    def get_steer(course, speed, dt, eps=1e-12):
+    def get_steer(course, speed, dt, eps=1e-8):
         sgn = np.sign(course)
         dist = speed * dt
         R = dist / (np.deg2rad(abs(course)) + eps)

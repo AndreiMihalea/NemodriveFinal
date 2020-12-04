@@ -26,7 +26,7 @@ parser.add_argument("--log_dir", type=str, default="./logs", help="logging direc
 parser.add_argument("--vis_dir", type=str, default="./snapshots", help="visualize directory")
 parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
 parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
-parser.add_argument("--num_vis", type=int, default=4, help="number of visualizations")
+parser.add_argument("--num_vis", type=int, default=10, help="number of visualizations")
 parser.add_argument("--use_augm", action="store_true", help="use augmentation dataset")
 parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
 parser.add_argument("--use_balance", action="store_true", help="balance training dataset")

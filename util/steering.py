@@ -7,8 +7,11 @@ MIN_TURNING_RADIUS = 5.
 MAX_STEER = 500
 MAX_WHEEL_ANGLE = np.rad2deg(np.arctan(CAR_L / MIN_TURNING_RADIUS))
 STEERING_RATIO = MAX_STEER / MAX_WHEEL_ANGLE
-eps = 1e-12
+eps = 1e-8
 
+
+def sign(x):
+    return 1 if x >= 0 else -1
 
 def get_delta_from_steer(steer, steering_ratio=STEERING_RATIO):
     """
@@ -16,7 +19,7 @@ def get_delta_from_steer(steer, steering_ratio=STEERING_RATIO):
     :param steering_ratio: ratio of maximum steer and maximum wheel angle (is constant)
     :return: wheel angle
     """
-    sgn = np.sign(steer)
+    sgn = sign(steer)
     delta = sgn * min(MAX_WHEEL_ANGLE, abs(steer)/steering_ratio)
     return delta
 
@@ -27,7 +30,7 @@ def get_steer_from_delta(delta, steering_ratio=STEERING_RATIO):
     :param steering_ratio: ratio of maximum steer and maximum wheel angle (is constant)
     :return:
     """
-    sgn = np.sign(delta)
+    sgn = sign(delta)
     steer = sgn * min(MAX_STEER, abs(delta) * steering_ratio)
     return steer
 
@@ -38,7 +41,7 @@ def get_radius_from_delta(delta, car_l=CAR_L):
     :param car_l: wheel base
     :return: radius of the circle that the car makes
     """
-    sgn = np.sign(delta)
+    sgn = sign(delta)
     r = car_l/np.tan(np.deg2rad(abs(delta), dtype=np.float32) + eps)
     r = sgn * max(r, MIN_TURNING_RADIUS)
     return r
@@ -51,7 +54,7 @@ def get_delta_from_radius(r, car_l=CAR_L, car_t=CAR_T):
     :param car_t: Tread
     :return: Angles of front center, inner wheel, outer wheel
     """
-    sgn = np.sign(r)
+    sgn = sign(r)
     r = max(abs(r), MIN_TURNING_RADIUS)
     delta_i = sgn * np.rad2deg(np.arctan(car_l / (r - car_t / 2.)))
     delta = sgn * np.rad2deg(np.arctan(car_l / r))

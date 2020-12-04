@@ -9,9 +9,11 @@ import matplotlib.pyplot as plt
 import pickle as pkl
 import argparse
 import cv2
+import glob
 
 from tqdm import tqdm
 from util.reader import Reader, JSONReader, PKLReader
+from util.vis import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--root_dir", type=str, help="path to the directory containing the raw datasets (.mov & .json)")
@@ -32,24 +34,32 @@ def read_data(metadata: str, path_img: str, path_data: str, verbose: bool = Fals
     frame_rate = 3
     if args.use_old:
         reader = JSONReader(args.root_dir, metadata, frame_rate=frame_rate)
+        scene = metadata.split(".")[0]
     else:
         root_path = os.path.join(args.root_dir, metadata)
         reader = PKLReader(root_path, "metadata.pkl", frame_rate=frame_rate)
+        scene = "_".join(metadata.split("/")[-3:])
 
     frame_idx = 0
     while True:
-        # get next frame corresponding to current prediction
-        frame, speed, rel_course = reader.get_next_image()
+        try:
+            # get next frame corresponding to current prediction
+            frame, speed, rel_course = reader.get_next_image()
+        except:
+            break
+
         if frame.size == 0:
             break
-            
+        
+        if rel_course is None:
+            continue
+
         # process frame
         frame = reader.crop_car(frame)
         frame = reader.crop_center(frame)
         frame = reader.resize_img(frame)
 
         # save image
-        scene = metadata.split(".")[0]
         frame_path = os.path.join(path_img, scene + "." + str(frame_idx).zfill(5) + ".png")
         cv2.imwrite(frame_path, frame)
 
@@ -89,11 +99,13 @@ if __name__ == "__main__":
         os.makedirs(path_data)
 
     # read the list of scenes
-    files = os.listdir(args.root_dir)
     if args.use_old:
+        files = os.listdir(args.root_dir)
         metadata = [file for file in files if file.endswith(".json")]
     else:
-        metadata = files.copy()
+        path = os.path.join(args.root_dir, "**/*.pkl")
+        files = list(glob.iglob(path, recursive=True))
+        metadata = ["/".join(file.split('/')[:-1]) for file in files]
 
     # process all scenes
     for md in tqdm(metadata):

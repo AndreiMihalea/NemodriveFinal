@@ -79,3 +79,37 @@ def visualisation(img, course, softmax_output, num_vis, path):
     pil_snapshots = pil.fromarray(snapshot.astype(np.uint8))
     pil_snapshots.save(path)
     return snapshot
+
+
+def gaussian_dist(mean=200.0, std=5, nbins=401):
+    x = np.arange(401)
+    pdf = np.exp(-0.5 * ((x - mean) / std)**2)
+    pmf = pdf / pdf.sum()
+    return pmf
+
+def plot_obs_course(img: np.array, rel_course: float, verbose: bool = True):
+    # compute the gaussian distribution
+    dist = gaussian_dist(200 + 10 * rel_course)
+    
+    # plot the distribution
+    fig = plt.figure()
+    plt.plot(dist)
+    
+    # transform figure to np.array
+    course_img = np.asarray(fig2img(fig, img.shape[1], img.shape[0]))
+    
+    # close current figure 
+    plt.close(fig)
+
+    # compute the full_img as a concatentation
+    # between the observation and the course distribution
+    full_img = np.concatenate([img, course_img], axis=1)
+    full_img = cv2.resize(full_img, None, fx=2, fy=2)
+
+    # display if verbose
+    if verbose:
+        cv2.imshow("FULL", full_img)
+        cv2.waitKey(0)
+
+    return full_img
+

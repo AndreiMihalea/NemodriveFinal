@@ -8,3 +8,4 @@ from .vis import *
 from .simulator import *
 from .early import *
 from .plots import *
+from .view_dataset import *

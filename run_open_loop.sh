@@ -2,7 +2,7 @@
 
 BATCH_SIZE=128
 DATASET_DIR=./dataset
-LOAD_MODEL=resnet_speed_augm_old_balance
+LOAD_MODEL=00000
 
 python open_loop.py \
 	--batch_size $BATCH_SIZE \

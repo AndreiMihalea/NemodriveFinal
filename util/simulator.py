@@ -3,7 +3,7 @@ import numpy as np
 import PIL.Image as pil
 import util.transformation as transformation
 import util.steering as steering
-from util.reader import Reader
+from .reader import Reader
 
 
 class Simulator(object):

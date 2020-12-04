@@ -20,8 +20,8 @@ if __name__ == "__main__":
     with open(args.test, "rt") as fin:
         test_scenes = fin.read()
 
-    train_scenes = set(train_scenes.split("\n"))
-    test_scenes = set(test_scenes.split("\n"))
+    train_scenes = set(train_scenes.split())
+    test_scenes = set(test_scenes.split())
     assert train_scenes.intersection(test_scenes) == set(), \
         "There is an overlap between the train and test scenes"
 

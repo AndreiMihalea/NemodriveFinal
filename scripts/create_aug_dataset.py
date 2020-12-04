@@ -17,6 +17,7 @@ import math
 import cv2
 import argparse
 import random
+import glob
 
 from tqdm import tqdm
 from util.reader import Reader, JSONReader, PKLReader
@@ -153,6 +154,7 @@ def read_metadata(metadata: str, path_img: str, path_data: str, verbose: bool = 
     :param verbose: verbose flag to display images while generating them
     :return: None
     """
+    
     frame_rate = 3
     if args.use_old:
         reader = JSONReader(args.root_dir, metadata, frame_rate=frame_rate)
@@ -163,9 +165,16 @@ def read_metadata(metadata: str, path_img: str, path_data: str, verbose: bool = 
     frame_idx = 0
     while True:
         # get next frame corresponding to current prediction
-        frame, speed, rel_course = reader.get_next_image()
+        try:
+            frame, speed, rel_course = reader.get_next_image()
+        except:
+            break
+        
         if frame.size == 0:
             break
+        
+        if rel_course is None:
+            continue
 
         # make conversion form relative course to steering
         dt = 1.0 / frame_rate
@@ -200,7 +209,11 @@ def read_metadata(metadata: str, path_img: str, path_data: str, verbose: bool = 
         aug_course = get_course(aug_steer, speed, dt)
         
         # save image and data
-        scene = metadata.split('.')[0]
+        if args.use_old:
+            scene = metadata.split('.')[0]
+        else:
+            scene = "_".join(metadata.split("/"))
+        
         frame_path = os.path.join(path_img, scene + "." + str(frame_idx).zfill(5) + ".png")
         cv2.imwrite(frame_path, aug_img)
        
@@ -240,13 +253,13 @@ if __name__ == "__main__":
     # get train scenes
     with open(args.train, "rt") as fin:
         train_scenes = fin.read()
-    train_scenes = set(train_scenes.split("\n"))
+    train_scenes = set(train_scenes.split())
 
     files = os.listdir(args.root_dir)
     if args.use_old:
         metadata = [file for file in files if file.endswith(".json") and file[:-5] in train_scenes]
     else:
-        metadata = files.copy()
+        metadata = list(train_scenes)
 
     # read metadata
     for md in tqdm(metadata):

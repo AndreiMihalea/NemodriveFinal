@@ -94,5 +94,5 @@ class Crop(object):
 
 class Convertor(object):
     @staticmethod
-    def kmperh2mperh(speed):
+    def kmperh2mpers(speed):
         return speed / 3.6
