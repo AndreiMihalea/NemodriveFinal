@@ -50,8 +50,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # define model
 nbins=401
 model = RESNET(
-	no_outputs=nbins,
-	use_speed=args.use_speed
+    no_outputs=nbins,
+    use_speed=args.use_speed
 ).to(device)
 
 # define criterion
@@ -59,17 +59,17 @@ criterion = nn.KLDivLoss(reduction="batchmean")
 
 # define optimizer
 if args.optimizer == "adam":
-	optimizer = optim.Adam(
-		filter(lambda p: p.requires_grad, model.parameters()),
-		lr=args.lr_ft if args.finetune else args.lr,
-		weight_decay=args.weight_decay
-	)
+    optimizer = optim.Adam(
+        filter(lambda p: p.requires_grad, model.parameters()),
+        lr=args.lr_ft if args.finetune else args.lr,
+        weight_decay=args.weight_decay
+    )
 else:
-	optimizer = optim.RMSprop(
-		filter(lambda p: p.requires_grad, model.parameters()),
-		lr=args.lr_ft if args.finetune else args.lr,
-		weight_decay=args.weight_decay
-	)
+    optimizer = optim.RMSprop(
+        filter(lambda p: p.requires_grad, model.parameters()),
+        lr=args.lr_ft if args.finetune else args.lr,
+        weight_decay=args.weight_decay
+    )
 
 # learning rate scheduler
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
@@ -82,60 +82,60 @@ test_dataset = UPBDataset(dataset_dir, train=False)
 
 # balanced training dataset
 if args.use_balance:
-	weights_file = "weights"
-	if args.use_augm:
-		weights_file += "_augm"
-	weights_file += ".csv"
+    weights_file = "weights"
+    if args.use_augm:
+        weights_file += "_augm"
+    weights_file += ".csv"
 
-	weights = pd.read_csv(os.path.join(dataset_dir, weights_file)).to_numpy().reshape(-1)
-	weights = torch.DoubleTensor(weights)                                       
-	sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+    weights = pd.read_csv(os.path.join(dataset_dir, weights_file)).to_numpy().reshape(-1)
+    weights = torch.DoubleTensor(weights)                                       
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
 
-	train_dataloader = DataLoader(
-		train_dataset, 
-		batch_size=args.batch_size, 
-		sampler=sampler,
-		num_workers=args.num_workers,
-		pin_memory=True
-	)
+    train_dataloader = DataLoader(
+        train_dataset, 
+        batch_size=args.batch_size, 
+        sampler=sampler,
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
 
 else:
-	train_dataloader = DataLoader(
-		train_dataset, 
-		batch_size=args.batch_size, 
-		shuffle=True, 
-		drop_last=True, 
-		num_workers=args.num_workers
-	)
+    train_dataloader = DataLoader(
+        train_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=True, 
+        drop_last=True, 
+        num_workers=args.num_workers
+    )
 
 test_dataloader = DataLoader(
-	test_dataset,
-	batch_size=args.batch_size,
-	shuffle=True,
-	drop_last=True,
-	num_workers=1
+    test_dataset,
+    batch_size=args.batch_size,
+    shuffle=True,
+    drop_last=True,
+    num_workers=1
 )
 
 # create necessary directories
 if not os.path.exists(args.log_dir):
-	os.mkdir(args.log_dir)
+    os.mkdir(args.log_dir)
 
 if not os.path.exists(args.vis_dir):
-	os.mkdir(args.vis_dir)
+    os.mkdir(args.vis_dir)
 
 # define experiment name
 experiment = str(len(os.listdir(args.vis_dir))).zfill(5)
 
 if not os.path.exists(os.path.join(args.vis_dir, experiment)):
-	os.makedirs(os.path.join(args.vis_dir, experiment))
-	os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_train"))
-	os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_test"))
-	os.makedirs(os.path.join(args.vis_dir, experiment, "ckpts"))
+    os.makedirs(os.path.join(args.vis_dir, experiment))
+    os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_train"))
+    os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_test"))
+    os.makedirs(os.path.join(args.vis_dir, experiment, "ckpts"))
 
 # save args as json in the experiment folder
 path = os.path.join(args.vis_dir, experiment, "args.txt")
 with open(path, 'w') as fout:
-	json.dump(args.__dict__, fout, indent=2)
+    json.dump(args.__dict__, fout, indent=2)
 
 # define writer & running loss
 writer = SummaryWriter(os.path.join(args.log_dir, experiment))
@@ -143,144 +143,144 @@ rloss = None
 
 
 def run_epoch(dataloader, epoch, train_flag=True):
-	global rloss
+    global rloss
 
-	# total loss
-	total_loss = 0.0
+    # total loss
+    total_loss = 0.0
 
-	for  i, data in enumerate(dataloader):
-		if train_flag:
-			optimizer.zero_grad()
+    for  i, data in enumerate(dataloader):
+        if train_flag:
+            optimizer.zero_grad()
 
-		# pass data through model
-		for key in data:
-			data[key] = data[key].to(device)
+        # pass data through model
+        for key in data:
+            data[key] = data[key].to(device)
 
-		if train_flag:
-			course_logits = model(data)
-		else:
-			with torch.no_grad():
-				course_logits = model(data)
+        if train_flag:
+            course_logits = model(data)
+        else:
+            with torch.no_grad():
+                course_logits = model(data)
 
-		# compute steering loss
-		log_softmax_output = F.log_softmax(course_logits, dim=1)
-		loss = criterion(log_softmax_output, data["rel_course"])
+        # compute steering loss
+        log_softmax_output = F.log_softmax(course_logits, dim=1)
+        loss = criterion(log_softmax_output, data["rel_course"])
 
-		# gradient step
-		if train_flag:
-			loss.backward()
-			optimizer.step()
+        # gradient step
+        if train_flag:
+            loss.backward()
+            optimizer.step()
 
-		# update running losses
-		if train_flag:
-			rloss = loss.item() if rloss is None else rloss * 0.99 + 0.01 * loss.item()
-		
-		# update total loss
-		total_loss += loss.item()
-		
-		# print statistics
-		if train_flag and i % args.log_interval == 0:
-			print("Epoch: %d, Batch: %d, Running loss: %.4f" % (epoch, i, rloss))
-			index = epoch * (len(train_dataset) // args.batch_size) + i
-			writer.add_scalar("rloss", rloss, index)			
-			writer.flush()
+        # update running losses
+        if train_flag:
+            rloss = loss.item() if rloss is None else rloss * 0.99 + 0.01 * loss.item()
+        
+        # update total loss
+        total_loss += loss.item()
+        
+        # print statistics
+        if train_flag and i % args.log_interval == 0:
+            print("Epoch: %d, Batch: %d, Running loss: %.4f" % (epoch, i, rloss))
+            index = epoch * (len(train_dataset) // args.batch_size) + i
+            writer.add_scalar("rloss", rloss, index)            
+            writer.flush()
 
-		# visualization
-		if i % args.vis_interval == 0:
-			num_vis = min(args.num_vis, args.batch_size)
-			softmax_output = F.softmax(course_logits, dim=1)
+        # visualization
+        if i % args.vis_interval == 0:
+            num_vis = min(args.num_vis, args.batch_size)
+            softmax_output = F.softmax(course_logits, dim=1)
 
-			folder = "imgs_train" if train_flag else "imgs_test"
-			path = os.path.join(args.vis_dir, experiment, folder, "epoch:%d.batch:%d.png" % (epoch, i))
-			visualisation(
-				img=data["img"][:num_vis],
-				course=data["rel_course"][:num_vis], 
-				softmax_output=softmax_output[:num_vis], 
-				num_vis=num_vis, 
-				path=path
-			)
-	return total_loss
+            folder = "imgs_train" if train_flag else "imgs_test"
+            path = os.path.join(args.vis_dir, experiment, folder, "epoch:%d.batch:%d.png" % (epoch, i))
+            visualisation(
+                img=data["img"][:num_vis],
+                course=data["rel_course"][:num_vis], 
+                softmax_output=softmax_output[:num_vis], 
+                num_vis=num_vis, 
+                path=path
+            )
+    return total_loss
 
 
 if __name__ == "__main__":
-	start_epoch = 0
-	best_score = None
+    start_epoch = 0
+    best_score = None
 
-	if args.finetune and not args.load_model:
-		raise Exception("Need to load a model for finetunnig")
+    if args.finetune and not args.load_model:
+        raise Exception("Need to load a model for finetunnig")
 
-	if args.load_model:
-		ckpt_name = os.path.join(args.vis_dir, args.load_model, "ckpts", "default.pth")
-		start_epoch = load_ckpt(
-				ckpt_name=ckpt_name,
-				models=[('model', model)], 
-				optimizers=[('optimizer', optimizer)],
-				schedulers=[('scheduler', scheduler)],
-				rlosses=[('rloss', rloss)], 
-				best_scores=[('best_score', best_score)]
-		)
+    if args.load_model:
+        ckpt_name = os.path.join(args.vis_dir, args.load_model, "ckpts", "default.pth")
+        start_epoch = load_ckpt(
+                ckpt_name=ckpt_name,
+                models=[('model', model)], 
+                optimizers=[('optimizer', optimizer)],
+                schedulers=[('scheduler', scheduler)],
+                rlosses=[('rloss', rloss)], 
+                best_scores=[('best_score', best_score)]
+        )
                 
-                if args.fine_tune:
-                    # initialize optimizer
-                    optimizer = optim.RMSprop(
-                        filter(lambda p: p.requires_grad, model.parameters()),
-                        lr=args.lr_ft if args.finetune else args.lr,
-                        weight_decay=args.weight_decay
-                    )
+        if args.fine_tune:
+            # initialize optimizer
+            optimizer = optim.RMSprop(
+                filter(lambda p: p.requires_grad, model.parameters()),
+                lr=args.lr_ft if args.finetune else args.lr,
+                weight_decay=args.weight_decay
+            )
 
-                    # initialize scheduler
-                    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
-                    
-                    # freeze parameters
-                    model.requires_grad_(False)
+            # initialize scheduler
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
+            
+            # freeze parameters
+            model.requires_grad_(False)
 
-                    # set trainable parameters
-                    model.fc.requires_grad_(True)
-                    model.layer4[1].requires_grad_(True)
-                    model.layer4[0].requires_grad_(True)
-                    model.layer3[1].requires_grad_(True)
-                    model.layer3[0].requires_grad_(True)
+            # set trainable parameters
+            model.fc.requires_grad_(True)
+            model.layer4[1].requires_grad_(True)
+            model.layer4[0].requires_grad_(True)
+            model.layer3[1].requires_grad_(True)
+            model.layer3[0].requires_grad_(True)
 
 
-	# define early stopping
-	early_stopping = EarlyStopping(patience=args.patience)
+    # define early stopping
+    early_stopping = EarlyStopping(patience=args.patience)
 
-	for epoch in tqdm(range(start_epoch, args.num_epochs)):
-		model.train()
-		train_loss = run_epoch(train_dataloader, epoch=epoch, train_flag=True)
-		train_loss /= len(train_dataloader)
+    for epoch in tqdm(range(start_epoch, args.num_epochs)):
+        model.train()
+        train_loss = run_epoch(train_dataloader, epoch=epoch, train_flag=True)
+        train_loss /= len(train_dataloader)
 
-		model.eval()
-		test_loss = run_epoch(test_dataloader, epoch=epoch, train_flag=False)
-		test_loss /= len(test_dataloader)
+        model.eval()
+        test_loss = run_epoch(test_dataloader, epoch=epoch, train_flag=False)
+        test_loss /= len(test_dataloader)
 
-		# log
-		print("Epoch: %d, Train Loss: %.4f, Test Loss: %4f" % (epoch, train_loss, test_loss))
-		writer.add_scalar("train_loss", train_loss, epoch)
-		writer.add_scalar("test_loss", test_loss, epoch)
-		writer.flush()
+        # log
+        print("Epoch: %d, Train Loss: %.4f, Test Loss: %4f" % (epoch, train_loss, test_loss))
+        writer.add_scalar("train_loss", train_loss, epoch)
+        writer.add_scalar("test_loss", test_loss, epoch)
+        writer.flush()
 
-		if epoch % args.save_interval == 0 and (best_score is None or best_score > test_loss):
-			best_score = test_loss
-			name = "epoch: %d; tloss: %.2f; vloss: %.2f.pth" % (epoch, train_loss, test_loss)
-			ckpt_name = os.path.join(args.vis_dir, experiment, "ckpts", name)
-			save_ckpt(
-				ckpt_name, 
-				models=[('model', model)], 
-				optimizers=[('optimizer', optimizer)],
-				schedulers=[('scheduler', scheduler)],
-				rlosses=[('rloss', rloss)], 
-				best_scores=[('best_score', best_score)],
-				n_iter=epoch + 1
-			)
-			print("Model saved!")
+        if epoch % args.save_interval == 0 and (best_score is None or best_score > test_loss):
+            best_score = test_loss
+            name = "epoch: %d; tloss: %.2f; vloss: %.2f.pth" % (epoch, train_loss, test_loss)
+            ckpt_name = os.path.join(args.vis_dir, experiment, "ckpts", name)
+            save_ckpt(
+                ckpt_name, 
+                models=[('model', model)], 
+                optimizers=[('optimizer', optimizer)],
+                schedulers=[('scheduler', scheduler)],
+                rlosses=[('rloss', rloss)], 
+                best_scores=[('best_score', best_score)],
+                n_iter=epoch + 1
+            )
+            print("Model saved!")
 
-		# learning rate scheduler step
-		scheduler.step()
+        # learning rate scheduler step
+        scheduler.step()
 
-		# early stopping
-		early_stopping(test_loss)
-		if early_stopping.early_stop:
-			break
+        # early stopping
+        early_stopping(test_loss)
+        if early_stopping.early_stop:
+            break
 
 writer.close()
