@@ -30,4 +30,4 @@ python train.py \
 	--optimizer $OPTIMIZER \
 	--weight_decay $WEIGHT_DECAY\
 	--lr $LR \
-	--use_old
+#	--use_old

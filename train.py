@@ -54,7 +54,6 @@ model = RESNET(
 	use_speed=args.use_speed
 ).to(device)
 
-
 # define criterion
 criterion = nn.KLDivLoss(reduction="batchmean")
 
@@ -211,7 +210,7 @@ if __name__ == "__main__":
 		raise Exception("Need to load a model for finetunnig")
 
 	if args.load_model:
-		ckpt_name = os.path.join(args.vis_dir, experiment, "ckpts", str(args.load_model) + ".pth")
+		ckpt_name = os.path.join(args.vis_dir, args.load_model, "ckpts", "default.pth")
 		start_epoch = load_ckpt(
 				ckpt_name=ckpt_name,
 				models=[('model', model)], 
@@ -220,6 +219,28 @@ if __name__ == "__main__":
 				rlosses=[('rloss', rloss)], 
 				best_scores=[('best_score', best_score)]
 		)
+                
+                if args.fine_tune:
+                    # initialize optimizer
+                    optimizer = optim.RMSprop(
+                        filter(lambda p: p.requires_grad, model.parameters()),
+                        lr=args.lr_ft if args.finetune else args.lr,
+                        weight_decay=args.weight_decay
+                    )
+
+                    # initialize scheduler
+                    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
+                    
+                    # freeze parameters
+                    model.requires_grad_(False)
+
+                    # set trainable parameters
+                    model.fc.requires_grad_(True)
+                    model.layer4[1].requires_grad_(True)
+                    model.layer4[0].requires_grad_(True)
+                    model.layer3[1].requires_grad_(True)
+                    model.layer3[0].requires_grad_(True)
+
 
 	# define early stopping
 	early_stopping = EarlyStopping(patience=args.patience)
