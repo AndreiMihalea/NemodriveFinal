@@ -121,9 +121,12 @@ class RESNET(nn.Module):
 		B, _, H, W = data["img"].shape
 
 		# mean and standard deviation for rgb image
-		mean_rgb = torch.tensor([0.47, 0.44, 0.45]).view(1, 3, 1, 1).to(self.device)
-		std_rgb = torch.tensor([0.22, 0.22, 0.22]).view(1, 3, 1, 1).to(self.device)
-
+		# mean_rgb = torch.tensor([0.47, 0.44, 0.45]).view(1, 3, 1, 1).to(self.device)
+		# std_rgb = torch.tensor([0.22, 0.22, 0.22]).view(1, 3, 1, 1).to(self.device)
+            	
+                mean_rgb = torch.tensor([0.5, 0.5, 0.5]).view(1, 3, 1, 1).to(self.device)
+		std_rgb = torch.tensor([0.5, 0.5, 0.5]).view(1, 3, 1, 1).to(self.device)
+                
 		# make input unit normal
 		img = data["img"]
 		img = (img - mean_rgb) / std_rgb

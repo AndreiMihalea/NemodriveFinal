@@ -9,4 +9,4 @@ python open_loop.py \
 	--dataset_dir $DATASET_DIR \
 	--load_model $LOAD_MODEL \
 	--use_speed \
-	--use_old \
+#	--use_old \
