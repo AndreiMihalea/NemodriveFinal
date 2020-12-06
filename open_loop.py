@@ -31,7 +31,7 @@ nbins=401
 experiment = ""
 model = None
 if args.model == "resnet":
-    model = RESNET(no_outputs=nbins, use_speed=args.use_speed).to(device)
+    model = RESNET(no_outputs=nbins, use_speed=args.use_speed, use_old=args.use_old).to(device)
 
 # load model
 path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")

@@ -38,6 +38,5 @@ if __name__ == "__main__":
             dict_data = pkl.load(fin)
 
         # plot data
+        print(dict_data)
         plot_obs_course(np_img, dict_data['rel_course'], verbose=True)
-        print(img)
-    

@@ -21,7 +21,6 @@ from util.plots import *
 parser = argparse.ArgumentParser()
 parser.add_argument('--begin', type=int, help="starting video index", default=0)
 parser.add_argument('--end', type=int, help="ending video index", default=81)
-parser.add_argument('--model', type=str, help='nvidia or resnet', default='nvidia')
 parser.add_argument('--load_model', type=str, help='name of the model', default='default')
 parser.add_argument('--use_speed', action='store_true', help='use speed of the vehicle')
 parser.add_argument('--use_old', action='store_true', help="use old dataset")
@@ -43,7 +42,8 @@ nbins = 401
 experiment = ''
 model = RESNET(
     no_outputs=nbins,
-    use_speed=args.use_speed
+    use_speed=args.use_speed,
+    use_old=args.use_old    
 ).to(device)
 experiment += "resnet"
 model = model.to(device)

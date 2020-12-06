@@ -7,7 +7,7 @@
 BEGIN=0
 END=100
 MODEL=resnet
-LOAD_MODEL=00000
+LOAD_MODEL=00003
 SPLIT_PATH=data_split/old_dataset/rand_split/test_scenes.txt
 DATA_PATH=/home/nemodrive/workspace/roberts/UPB_dataset/old_dataset
 SIM_DIR=simulation
@@ -15,7 +15,6 @@ SIM_DIR=simulation
 python close_loop.py \
 	--begin $BEGIN \
 	--end $END \
-	--model $MODEL \
 	--load_model $LOAD_MODEL \
 	--split_path $SPLIT_PATH \
 	--data_path $DATA_PATH \

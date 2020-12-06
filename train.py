@@ -32,7 +32,6 @@ parser.add_argument("--use_speed", action="store_true", help="append speed to nv
 parser.add_argument("--use_balance", action="store_true", help="balance training dataset")
 parser.add_argument("--use_old", action="store_true",  help="use old dataset")
 parser.add_argument("--load_model", type=str, help="checkpoint name", default=None)
-parser.add_argument("--model", type=str, default="resnet", help="more to be added [resnet]")
 parser.add_argument("--patience", type=int, default=2, help="early stopping patience")
 parser.add_argument("--weight_decay", type=float, default=0, help="weight decay optimizer")
 parser.add_argument("--finetune", action="store_true", help="flag for finetunning")
@@ -41,6 +40,9 @@ args = parser.parse_args()
 
 # set seed
 torch.manual_seed(0)
+torch.cuda.manual_seed(0)
+torch.cuda.manual_seed_all(0)
+torch.backends.cudnn.deterministic=True
 np.random.seed(0)
 random.seed(0)
 
@@ -51,7 +53,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 nbins=401
 model = RESNET(
     no_outputs=nbins,
-    use_speed=args.use_speed
+    use_speed=args.use_speed,
+    use_old=args.use_old
 ).to(device)
 
 # define criterion
@@ -60,15 +63,22 @@ criterion = nn.KLDivLoss(reduction="batchmean")
 # define optimizer
 if args.optimizer == "adam":
     optimizer = optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.lr_ft if args.finetune else args.lr,
+        model.parameters(),
+        lr=args.lr ,
+        weight_decay=args.weight_decay
+    )
+elif args.optimizer == 'rmsprop':
+    optimizer = optim.RMSprop(
+        model.parameters(),
+        lr=args.lr,
         weight_decay=args.weight_decay
     )
 else:
-    optimizer = optim.RMSprop(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.lr_ft if args.finetune else args.lr,
-        weight_decay=args.weight_decay
+    optimizer = optim.SGD(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+        momentum=0.9,
     )
 
 # learning rate scheduler
@@ -142,11 +152,24 @@ writer = SummaryWriter(os.path.join(args.log_dir, experiment))
 rloss = None
 
 
+def eval_batch_norm():
+    bn_layers = [x for x in model.modules() if type(x) == nn.BatchNorm2d]
+
+    for layer in bn_layers:
+        params = list(layer.parameters())
+        
+        if not params[0].requires_grad:
+            layer.eval()
+
+
 def run_epoch(dataloader, epoch, train_flag=True):
     global rloss
 
     # total loss
     total_loss = 0.0
+
+    if train_flag and args.finetune:
+        eval_batch_norm()
 
     for  i, data in enumerate(dataloader):
         if train_flag:
@@ -220,26 +243,40 @@ if __name__ == "__main__":
                 best_scores=[('best_score', best_score)]
         )
                 
-        if args.fine_tune:
+        if args.finetune:
             # initialize optimizer
-            optimizer = optim.RMSprop(
-                filter(lambda p: p.requires_grad, model.parameters()),
-                lr=args.lr_ft if args.finetune else args.lr,
-                weight_decay=args.weight_decay
+            #optimizer = optim.RMSprop(
+            #    model.parameters(),
+            #    lr=args.lr_ft,
+            #    weight_decay=args.weight_decay
+            #)
+            optimizer = optim.SGD(
+                model.parameters(),
+                lr=args.lr_ft,
+                weight_decay=args.weight_decay,
+                momentum=0.9
             )
 
             # initialize scheduler
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
             
             # freeze parameters
-            model.requires_grad_(False)
+            #model.requires_grad_(False)
 
             # set trainable parameters
-            model.fc.requires_grad_(True)
-            model.layer4[1].requires_grad_(True)
-            model.layer4[0].requires_grad_(True)
-            model.layer3[1].requires_grad_(True)
-            model.layer3[0].requires_grad_(True)
+            #model.fc2.requires_grad_(True)
+            #model.fc1.requires_grad_(True) 
+            #model.encoder[-1][-1].requires_grad_(True)
+            #model.encoder[-1][-2].requires_grad_(True)
+            #model.encoder[-2][-1].requires_grad_(True)
+            #model.encoder[-2][-2].requires_grad_(True)
+            #model.encoder[-3][-1].requires_grad_(True)
+            #model.encoder[-3][-2].requires_grad_(True)
+            #model.encoder[-4][-1].requires_grad_(True)
+            #model.encoder[-4][-2].requires_grad_(True)
+            #model.encoder[-6].requires_grad_(True)
+            #model.encoder[-7].requires_grad_(True)
+            print("Fine-tunning ... ")
 
 
     # define early stopping

@@ -2,7 +2,7 @@
 
 BATCH_SIZE=128
 DATASET_DIR=./dataset
-LOAD_MODEL=00001
+LOAD_MODEL=00009
 
 python open_loop.py \
 	--batch_size $BATCH_SIZE \

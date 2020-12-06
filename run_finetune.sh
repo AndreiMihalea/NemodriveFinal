@@ -3,15 +3,16 @@
 NUM_EPOCHS=100
 STEP_SIZE=100
 BATCH_SIZE=128
-LR=0.001
-WEIGHT_DECAY=0.1
+LR_FT=0.0001
+WEIGHT_DECAY=0.01
 OPTIMIZER=sgd
 
-VIS_INT=100
-LOG_INT=50
+VIS_INT=50
+LOG_INT=25
 DATASET_DIR=./dataset
+MODEL=00000
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 # train model using 2D persepctive augmentation and append speed
 echo $MODEL" + SPEED + BALANCE + AUG"
@@ -27,5 +28,6 @@ python train.py \
 	--num_epochs $NUM_EPOCHS \
 	--optimizer $OPTIMIZER \
 	--weight_decay $WEIGHT_DECAY\
-	--lr $LR \
-#	--use_old
+	--lr_ft $LR_FT \
+	--load_model $MODEL \
+	--finetune \
