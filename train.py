@@ -114,15 +114,15 @@ else:
         train_dataset, 
         batch_size=args.batch_size, 
         shuffle=True, 
-        drop_last=True, 
+        drop_last=False, 
         num_workers=args.num_workers
     )
 
 test_dataloader = DataLoader(
     test_dataset,
     batch_size=args.batch_size,
-    shuffle=True,
-    drop_last=True,
+    shuffle=False,
+    drop_last=False,
     num_workers=1
 )
 
@@ -162,14 +162,31 @@ def eval_batch_norm():
             layer.eval()
 
 
+def train_batch_norm():
+    bn_layers = [x for x in model.modules() if type(x) == nn.BatchNorm2d]
+    
+    for layer in bn_layers:
+        layer.requires_grad_(True)
+
+def track_running_batch_norm(val):
+    bn_layers = [x for x in model.modules() if type(x) == nn.BatchNorm2d]
+    
+    for layer in bn_layers:
+        layer.requires_grad_(True)
+        layer.track_running_stats = val
+
+
+
 def run_epoch(dataloader, epoch, train_flag=True):
     global rloss
 
     # total loss
     total_loss = 0.0
-
-    if train_flag and args.finetune:
-        eval_batch_norm()
+    
+    # set not trainable batch norm layers
+    # into evaluation mode for finetuning
+    #if train_flag and args.finetune:
+    #    eval_batch_norm()
 
     for  i, data in enumerate(dataloader):
         if train_flag:
@@ -199,7 +216,8 @@ def run_epoch(dataloader, epoch, train_flag=True):
             rloss = loss.item() if rloss is None else rloss * 0.99 + 0.01 * loss.item()
         
         # update total loss
-        total_loss += loss.item()
+        batch_size = data['rel_course'].shape[0]
+        total_loss += loss.item() * batch_size
         
         # print statistics
         if train_flag and i % args.log_interval == 0:
@@ -263,6 +281,9 @@ if __name__ == "__main__":
             # freeze parameters
             #model.requires_grad_(False)
 
+            # set batch norm to train
+            #train_batch_norm()
+            
             # set trainable parameters
             #model.fc2.requires_grad_(True)
             #model.fc1.requires_grad_(True) 
@@ -285,14 +306,14 @@ if __name__ == "__main__":
     for epoch in tqdm(range(start_epoch, args.num_epochs)):
         model.train()
         train_loss = run_epoch(train_dataloader, epoch=epoch, train_flag=True)
-        train_loss /= len(train_dataloader)
+        train_loss /= len(train_dataset)
 
         model.eval()
         test_loss = run_epoch(test_dataloader, epoch=epoch, train_flag=False)
-        test_loss /= len(test_dataloader)
+        test_loss /= len(test_dataset)
 
         # log
-        print("Epoch: %d, Train Loss: %.4f, Test Loss: %4f" % (epoch, train_loss, test_loss))
+        print("Epoch: %d, Train Loss: %.4f, Test Loss: %.4f" % (epoch, train_loss, test_loss))
         writer.add_scalar("train_loss", train_loss, epoch)
         writer.add_scalar("test_loss", test_loss, epoch)
         writer.flush()
@@ -314,6 +335,8 @@ if __name__ == "__main__":
 
         # learning rate scheduler step
         scheduler.step()
+        print("Current learning rate: %f" % (optimizer.param_groups[0]['lr']))
+
 
         # early stopping
         early_stopping(test_loss)

@@ -11,6 +11,7 @@ from .transformation import Crop
 from .transformation import Convertor
 from .steering import *
 from nemodata.compression import Decompressor
+from PIL import Image
 
 
 class Reader(object):
@@ -176,7 +177,7 @@ class JSONReader(Reader):
         # self.northing = location['northing']
         # self.easting = location['easting']
 
-        return frame, speed, rel_course
+        return frame[...,::-1], speed, rel_course
 
 
 def gaussian_dist(mean=200.0, std=5, nbins=401):
@@ -319,6 +320,54 @@ class PKLReader(Reader):
         return img, speed, rel_course
 
 
+class PairReader(PKLReader):
+    def __init__(self, root_dir: str, file: str = None, frame_rate: int = 3):
+        """
+        Constructor
+        
+        For this class, only root_dir matters.
+        The parameters "file" and "frame_rate" are just for consistency 
+        """
+        super(PairReader, self).__init__(root_dir, file, frame_rate)
+        self.root_dir = root_dir
+        self.frame_idx = 0
+        self.generator = self._create_generator()
+
+    def _create_generator(self):
+        # filter images and data
+        files = os.listdir(self.root_dir)
+        path_imgs = filter(lambda x: x.endswith(".png"), files)
+        path_data = filter(lambda x: x.endswith(".pkl"), files)
+
+        # sort them to make sure that are paired
+        path_imgs = sorted(path_imgs)
+        path_data = sorted(path_data)
+
+        # add full path
+        path_imgs = [os.path.join(self.root_dir, x) for x in path_imgs]
+        path_data = [os.path.join(self.root_dir, x) for x in path_data]
+
+        for i in range(len(path_imgs)):
+            # read the image
+            img = Image.open(path_imgs[i])
+            img = np.asarray(img)
+
+            # read the data
+            with open(path_data[i], 'rb') as fin:
+                data = pkl.load(fin)
+            
+            yield img, data['speed'], data['rel_course']
+
+
+    def get_next_image(self):
+        try:
+            self.frame_idx += 1
+            return next(self.generator)
+        except Exception as e:
+            print(e)
+            return np.array([]), None, None
+
+
 if __name__ == "__main__":
     use_old_data = False
     old_dir = "/home/robert/PycharmProjects/upb_dataset"
@@ -326,44 +375,15 @@ if __name__ == "__main__":
     
 
     dirs = [
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/forward/13_28_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/forward/17_32_11_03_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/forward/17_37_11_03_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/forward/18_05_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/reverse/13_34_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/reverse/13_38_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/reverse/17_44_11_03_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/reverse/17_50_11_03_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/reverse/18_12_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/sport_biotehnice_rectorat_automatica/forward/18_21_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/sport_biotehnice_rectorat_automatica/reverse/18_37_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica_biotehnice_rectorat/forward/17_56_11_03_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_energetica/forward/17_56_10_12_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice_energetica/forward/19_00_10_29_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice_energetica/forward/17_40_10_12_2020',
- #'/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice_energetica/reverse/19_07_10_29_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice_energetica/reverse/17_47_10_12_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice/forward/18_17_11_03_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice/forward/17_00_10_12_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice/forward/18_00_10_12_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice/reverse/18_11_11_03_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_biotehnice/reverse/17_16_10_12_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/forward/14_09_10_29_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/forward/13_55_10_29_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/forward/18_25_11_03_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/forward/18_31_11_03_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/forward/18_43_11_03_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/reverse/14_18_10_29_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/reverse/14_03_10_29_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/reverse/18_37_11_03_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/rectorat_sport/reverse/18_48_11_03_2020',
- '/media/nemodrive/Samsung_T5/nemodrive_upb2020/energetica_automatica/forward/18_53_10_29_2020']
+        "/home/nemodrive/workspace/roberts/NemodriveFinalSplit/chunks/automatica_biotehnice_rectorat_forward_17_56_11_03_2020"
+    ]
 
     for new_dir in dirs:
 
         #new_dir =  '/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/forward/13_28_10_29_2020'
-        new_file = "metadata.pkl"
-        reader = JSONReader(old_dir, old_file) if use_old_data else PKLReader(new_dir, new_file)
+        #new_file = "metadata.pkl"
+        #reader = JSONReader(old_dir, old_file) if use_old_data else PKLReader(new_dir, new_file)
+        reader = PairReader(new_dir)
 
         while True:
             # get next frame corresponding to current prediction
@@ -373,7 +393,6 @@ if __name__ == "__main__":
             if x[0].size == 0:
                 break
 
-        #print("speed:", x[1], "rel_course:", x[2])
-        # cv2.imshow("Center image", x[0])
-        # cv2.waitKey(0)
-        # print("==========")
+            cv2.imshow("FULL", x[0])
+            cv2.waitKey(0)
+

@@ -14,8 +14,8 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_dir", type=str, default="dataset/new_dataset")
     args = parser.parse_args()    
     
-    imgs_path = os.path.join(args.dataset_dir, "img_aug")
-    data_path = os.path.join(args.dataset_dir, "data_aug")
+    imgs_path = os.path.join(args.dataset_dir, "img_real")
+    data_path = os.path.join(args.dataset_dir, "data_real")
 
     # read imgs and data files
     imgs = os.listdir(imgs_path)

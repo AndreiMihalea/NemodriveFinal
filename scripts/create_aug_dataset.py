@@ -173,7 +173,7 @@ def read_metadata(metadata: str, path_img: str, path_data: str, verbose: bool = 
         if frame.size == 0:
             break
         
-        if rel_course is None:
+        if (rel_course is None) or (abs(speed) < 1e-3):
             continue
 
         # make conversion form relative course to steering

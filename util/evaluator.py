@@ -87,7 +87,7 @@ class AugmentationEvaluator:
         frame = self.reader.crop_car(frame)
         frame = self.reader.crop_center(frame)
         frame = self.reader.resize_img(frame)
-        return frame, speed, real_course
+        return frame, speed, real_course, False
 
     def step(self, predicted_course=0.):
         """
@@ -96,7 +96,7 @@ class AugmentationEvaluator:
         """
         next_packet = self.reader.get_next_image()
         if len(next_packet[0]) == 0:
-            return np.array([]), None, None
+            return np.array([]), None, None, None
 
         # compute steering from course, speed, dt
         frame, speed, rel_course = self.packet
@@ -119,7 +119,7 @@ class AugmentationEvaluator:
             frame = self.reader.crop_car(frame)
             frame = self.reader.crop_center(frame)
             frame = self.reader.resize_img(frame)
-            return frame, speed, rel_course
+            return frame, speed, rel_course, True
 
         # update the frame with the simulated one
         self.packet = (next_sim_frame, *self.packet[1:])
@@ -131,7 +131,7 @@ class AugmentationEvaluator:
         frame = self.reader.crop_car(frame)
         frame = self.reader.crop_center(frame)
         frame = self.reader.resize_img(frame)
-        return frame, speed, rel_course
+        return frame, speed, rel_course, False
 
     @property
     def video_length(self):

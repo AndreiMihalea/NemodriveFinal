@@ -10,8 +10,8 @@
 # --use_old \
 
 # for the new dataset
-# python create_dataset.py \
-#  --root_dir /media/nemodrive/Samsung_T5/nemodrive_upb2020/\
+#python create_dataset.py \
+# --root_dir /media/nemodrive/Samsung_T5/nemodrive_upb2020/\
 
 ########################################################################
 #################### SPLIT THE DATASET #################################
@@ -24,7 +24,7 @@
 # --use_old
 
 # for the new dataset
-# python split_dataset.py \
+#python split_dataset.py \
 #  --train ../data_split/new_dataset/dir_split/train_scenes.txt \
 #  --test ../data_split/new_dataset/dir_split/test_scenes.txt \
 
@@ -40,9 +40,9 @@
 #  --use_old
 
 # for the new dataset
-# python create_aug_dataset.py \
-# --root_dir /media/nemodrive/Samsung_T5/nemodrive_upb2020/ \
-# --train ../data_split/new_dataset/dir_split/train_scenes.txt \
+python create_aug_dataset.py \
+ --root_dir /media/nemodrive/Samsung_T5/nemodrive_upb2020/ \
+ --train ../data_split/new_dataset/dir_split/train_scenes.txt \
 
 
 #######################################################################

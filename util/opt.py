@@ -17,7 +17,6 @@ if __name__ == "__main__":
         pin_memory=True
     )
 
-
     mean, std = .0, .0
     nb_samples = 0
 

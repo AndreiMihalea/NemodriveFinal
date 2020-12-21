@@ -12,11 +12,13 @@ import pickle as pkl
 from tqdm import tqdm
 import numpy as np
 import random
+import PIL.Image as pil
 
-from util.reader import Reader, JSONReader, PKLReader
+from util.reader import Reader, JSONReader, PKLReader, PairReader
 from util.evaluator import AugmentationEvaluator
 from util.plots import *
-
+from util.gradcam import *
+import util.vis as vis
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--begin', type=int, help="starting video index", default=0)
@@ -47,6 +49,9 @@ model = RESNET(
 ).to(device)
 experiment += "resnet"
 model = model.to(device)
+
+# define GradCAM explainer
+gradcam = GradCAM(model, model.encoder[-1][-1])
 
 # load model
 path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
@@ -126,6 +131,22 @@ def make_prediction(frame, speed):
     return course, toutput
 
 
+
+def get_explanation(frame, speed, idx):
+    tframe = process_frame(frame)
+    tspeed = torch.tensor([[speed]])
+    data = {
+        "img": tframe,
+        "speed": tspeed
+    }
+    
+    with torch.enable_grad():
+        amap = gradcam(data, idx)
+    
+    amap = GradCAM.cam_vis(frame, amap)
+    return amap
+
+
 # close loop evaluation
 def test_video(root_dir: str, metadata: str, time_penalty=6,
                translation_threshold=1.5, rotation_threshold=0.2, verbose=True):
@@ -147,7 +168,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         reader = JSONReader(root_dir=root_dir, json_file=metadata, frame_rate=3)
     else:
         path = os.path.join(root_dir, metadata)
-        reader = PKLReader(root_dir=path, pkl_file="metadata.pkl", frame_rate=3)
+        reader = PairReader(root_dir=path)
 
     # initialize evaluators
     # check multiple parameters like time_penalty, distance threshold and angle threshold
@@ -160,7 +181,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     )
 
     # get first two frames of the video and make a prediction
-    frame, speed, real_course = augm.reset()
+    frame, speed, real_course, interv = augm.reset()
 
     with torch.no_grad():
         for idx in itertools.count():
@@ -168,11 +189,11 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             if frame.size == 0:
                 break
             
-            frame = frame[..., ::-1] # BGR to RGB
+            # make prediction
             pred_course, toutput = make_prediction(frame, speed)
-            next_frame, next_speed, next_real_course = augm.step(pred_course)
+            next_frame, next_speed, next_real_course, interv = augm.step(pred_course)
             
-            if real_course is not None:
+            if not interv:
                 # distribution for the ground truth course
                 real_course_distribution = gaussian_distribution(10 * (real_course + 20))
                 real_course_distributions.append(real_course_distribution)
@@ -191,8 +212,22 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
                 full_img = visualisation(process_frame(frame), real_course_distribution, toutput, 1,
                                          imgs_path).astype(np.uint8)
 
-                # print and save courses
-                if verbose:
+                # get explanation using gradcam
+                idx = int(10 * (pred_course + 20))
+                amap = get_explanation(frame, speed, idx)
+                amap = cv2.resize(amap, (vis.WIDTH, vis.HEIGHT))
+                
+                # concatenate explaination (activation map) to the output
+                full_img = np.concatenate([full_img, amap], axis=1)
+
+            else:
+                full_img = np.zeros((vis.HEIGHT, 3 * vis.WIDTH, 3)).astype(np.uint8)
+
+            # save image
+            pil_snapshot = pil.fromarray(full_img.astype(np.uint8))
+            pil_snapshot.save(imgs_path)
+
+            if verbose:
                     print("Predicted Course: %.2f, Real Course: %.2f, Speed: %.2f" % (pred_course, real_course, speed))
                     cv2.imshow("State", full_img[..., ::-1])
                     cv2.waitKey(100)
@@ -228,13 +263,15 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
 
 if __name__ == "__main__":
-    with open(args.split_path, 'rt') as fin:
-        files = fin.read()
-
-    files = files.strip().split("\n")
     if args.use_old:
+        with open(args.split_path, 'rt') as fin:
+            files = fin.read()
+
+        files = files.strip().split("\n")
         files = [file + ".json" for file in files]   
-    files = files[args.begin:args.end]
+        files = files[args.begin:args.end]
+    else:
+        files = os.listdir(args.data_path)
 
     # test video
     for file in tqdm(files):

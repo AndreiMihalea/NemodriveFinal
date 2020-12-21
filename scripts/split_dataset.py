@@ -19,9 +19,16 @@ if __name__ == "__main__":
     # read testing scenes
     with open(args.test, "rt") as fin:
         test_scenes = fin.read()
+   
+    train_scenes = train_scenes.split()
+    test_scenes = test_scenes.split()
 
-    train_scenes = set(train_scenes.split())
-    test_scenes = set(test_scenes.split())
+    if not args.use_old:
+        train_scenes = [s.replace("/", "_") for s in train_scenes]
+        test_scenes = [s.replace("/", "_") for s in test_scenes]
+
+    train_scenes = set(train_scenes)
+    test_scenes = set(test_scenes)
     assert train_scenes.intersection(test_scenes) == set(), \
         "There is an overlap between the train and test scenes"
 

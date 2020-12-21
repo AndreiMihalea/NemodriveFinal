@@ -59,25 +59,31 @@ def plot_distr(softmax_output, course):
     return plot
 
 
-def visualisation(img, course, softmax_output, num_vis, path):
+def visualisation(img, course, softmax_output, num_vis, path, save=False):
     figs = []
 
-    for j in range(num_vis):
-        fig = []
+    if img is None:
+        snapshot = np.zeros((HEIGHT, 2 * WIDTH, 3))
+    else:
+        for j in range(num_vis):
+            fig = []
 
-        # plot image 
-        np_img = plot_img(img[j])
-        fig.append(np_img)
+            # plot image 
+            np_img = plot_img(img[j])
+            fig.append(np_img)
 
-        np_dist = plot_distr(softmax_output[j], course[j])
-        fig.append(np_dist)
+            np_dist = plot_distr(softmax_output[j], course[j])
+            fig.append(np_dist)
 
-        fig = np.concatenate(fig, axis=1)
-        figs.append(fig)
+            fig = np.concatenate(fig, axis=1)
+            figs.append(fig)
 
-    snapshot = np.concatenate(figs, axis=0)
-    pil_snapshots = pil.fromarray(snapshot.astype(np.uint8))
-    pil_snapshots.save(path)
+        snapshot = np.concatenate(figs, axis=0)
+
+    if save:
+        pil_snapshots = pil.fromarray(snapshot.astype(np.uint8))
+        pil_snapshots.save(path)
+    
     return snapshot
 
 

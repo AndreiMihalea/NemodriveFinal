@@ -41,9 +41,11 @@ if __name__ == "__main__":
 
                 img, speed, rel_course = x
 
-                if rel_course is not None:
-                    steering_buff.append(rel_course)
-                    direction_buff.append(label)
+                if (rel_course is None) or (abs(speed) < 1e-3):
+                    continue
+                
+                steering_buff.append(rel_course)
+                direction_buff.append(label)
         except:
             print(f"Exception in folder: {folder}")
     

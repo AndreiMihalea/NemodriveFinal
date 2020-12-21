@@ -51,7 +51,7 @@ def read_data(metadata: str, path_img: str, path_data: str, verbose: bool = Fals
         if frame.size == 0:
             break
         
-        if rel_course is None:
+        if (rel_course is None) or (abs(speed) < 1e-3):
             continue
 
         # process frame
@@ -106,7 +106,7 @@ if __name__ == "__main__":
         path = os.path.join(args.root_dir, "**/*.pkl")
         files = list(glob.iglob(path, recursive=True))
         metadata = ["/".join(file.split('/')[:-1]) for file in files]
-
+    
     # process all scenes
     for md in tqdm(metadata):
         read_data(metadata=md, path_img=path_img, path_data=path_data, verbose=args.verbose)
