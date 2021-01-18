@@ -4,14 +4,14 @@ NUM_EPOCHS=100
 STEP_SIZE=100
 BATCH_SIZE=128
 LR=0.001
-WEIGHT_DECAY=0.0
+WEIGHT_DECAY=0.1
 OPTIMIZER=sgd
 
 VIS_INT=100
 LOG_INT=50
 DATASET_DIR=./dataset
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 # train model using 2D persepctive augmentation and append speed
 echo $MODEL" + SPEED + BALANCE + AUG"
