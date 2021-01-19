@@ -8,52 +8,23 @@ import argparse
 from models.resnet import *
 from util.dataset import *
 from util.io import *
-
 from tqdm import tqdm
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--batch_size", type=int, default=12, help="batch size")
-parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
-parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
-parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
-parser.add_argument("--use_old", action="store_true", help="use old dataset")
-parser.add_argument("--load_model", type=str, help="checkpoint name", default=None)
-parser.add_argument("--model", type=str, help="[resnet]", default="resnet")
-args = parser.parse_args()
 
-torch.manual_seed(0)
-
-# define device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# define model
-nbins=401
-experiment = ""
-model = None
-if args.model == "resnet":
-    model = RESNET(no_outputs=nbins, use_speed=args.use_speed, use_old=args.use_old).to(device)
-
-# load model
-path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
-load_ckpt(path, [('model', model)])
-model.eval()
-
-# define criterion
-criterion = nn.KLDivLoss(reduction="none")
-
-# define dataloader
-dataset_dir = os.path.join(args.dataset_dir, "old_dataset" if args.use_old else "new_dataset")
-test_dataset = UPBDataset(dataset_dir, train=False)
-test_dataloader = DataLoader(
-    test_dataset,
-    batch_size=args.batch_size,
-    shuffle=False,
-    drop_last=False,
-    num_workers=args.num_workers
-)
+def get_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch_size", type=int, default=12, help="batch size")
+    parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
+    parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
+    parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
+    parser.add_argument("--use_pose", action="store_true", help="use pose dataset")
+    parser.add_argument("--load_model", type=str, help="checkpoint name", default=None)
+    parser.add_argument("--model", type=str, help="[resnet]", default="resnet")
+    args = parser.parse_args()
+    return args
 
 
-def main():
+def main(model: torch.nn.Module, test_dataloader: DataLoader):
     losses = []
 
     with torch.no_grad():
@@ -63,11 +34,11 @@ def main():
                 data[key] = data[key].to(device)
 
             # get output
-            course_logits = model(data)
+            turning_logits = model(data)
 
             # compute steering loss
-            log_softmax_output = F.log_softmax(course_logits, dim=1)
-            kl = criterion(log_softmax_output, data["rel_course"])
+            log_softmax_output = F.log_softmax(turning_logits, dim=1)
+            kl = criterion(log_softmax_output, data["turning_pmf"])
             kl = kl.sum(dim=1).cpu().numpy()
             losses += list(kl)
 
@@ -84,7 +55,40 @@ def main():
 
 
 if __name__ == "__main__":
-    results = main()
+    # parse arguments
+    args = get_args()
+
+    # set seed
+    torch.manual_seed(0)
+
+    # define device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # define model
+    model, nbins = None, 401
+    if args.model == "resnet":
+        model = RESNET(no_outputs=nbins).to(device)
+
+    # load model
+    path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
+    load_ckpt(path, [('model', model)])
+    model.eval()
+
+    # define criterion
+    criterion = nn.KLDivLoss(reduction="none")
+
+    # define dataloader
+    dataset_dir = os.path.join(args.dataset_dir, "pose_dataset" if args.use_pose else "gt_dataset")
+    test_dataset = UPBDataset(dataset_dir, train=True)
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        drop_last=False,
+        num_workers=args.num_workers
+    )
+
+    results = main(model, test_dataloader)
     print(results)
 
     if not os.path.exists("./results"):

@@ -3,7 +3,7 @@
 NUM_EPOCHS=100
 STEP_SIZE=100
 BATCH_SIZE=128
-LR=0.001
+LR=0.01
 WEIGHT_DECAY=0.1
 OPTIMIZER=sgd
 
@@ -19,8 +19,6 @@ python train.py \
 	--batch_size $BATCH_SIZE \
 	--vis_int $VIS_INT \
 	--log_int $LOG_INT \
-	--use_speed \
-	--use_aug \
 	--use_balance \
 	--dataset_dir $DATASET_DIR \
 	--step_size $STEP_SIZE \
@@ -28,4 +26,4 @@ python train.py \
 	--optimizer $OPTIMIZER \
 	--weight_decay $WEIGHT_DECAY\
 	--lr $LR \
-#	--use_old
+	#--use_aug \

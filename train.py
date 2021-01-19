@@ -1,180 +1,170 @@
 import random
 import torch.nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, Dataset
 import torch.optim as optim
 import argparse
 import json
+import os
+import pandas as pd
 
 from models.resnet import *
 from util.vis import *
 from util.io import *
 from util.early import *
+from util.dataset import UPBDataset
 
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
+from typing import Tuple
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--lr", type=float, default=1e-5, help="learning rate")
-parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs")
-parser.add_argument("--step_size", type=int, default=5, help="scheduler learning rate step size")
-parser.add_argument("--batch_size", type=int, default=128, help="batch size")
-parser.add_argument("--optimizer", type=str, default="adam", help="optimizer available: adam, rmsprop")
-parser.add_argument("--log_interval", type=int, default=50, help="number of batches to log after")
-parser.add_argument("--vis_interval", type=int, default=500, help="number of batches to visualize after")
-parser.add_argument("--save_interval", type=int, default=1, help="number of epoch to save the model after")
-parser.add_argument("--log_dir", type=str, default="./logs", help="logging directory")
-parser.add_argument("--vis_dir", type=str, default="./snapshots", help="visualize directory")
-parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
-parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
-parser.add_argument("--num_vis", type=int, default=10, help="number of visualizations")
-parser.add_argument("--use_augm", action="store_true", help="use augmentation dataset")
-parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
-parser.add_argument("--use_balance", action="store_true", help="balance training dataset")
-parser.add_argument("--use_old", action="store_true",  help="use old dataset")
-parser.add_argument("--load_model", type=str, help="checkpoint name", default=None)
-parser.add_argument("--patience", type=int, default=2, help="early stopping patience")
-parser.add_argument("--weight_decay", type=float, default=0, help="weight decay optimizer")
-parser.add_argument("--finetune", action="store_true", help="flag for finetunning")
-parser.add_argument("--lr_ft", type=float, default=1e-6, help="learning rate for finetunning")
-args = parser.parse_args()
+def get_args() -> argparse.Namespace:
+    """
+    Parses console arguments
 
-# set seed
-torch.manual_seed(0)
-torch.cuda.manual_seed(0)
-torch.cuda.manual_seed_all(0)
-torch.backends.cudnn.deterministic=True
-np.random.seed(0)
-random.seed(0)
+    Returns
+    -------
+    Parsed arguments
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lr", type=float, default=1e-5, help="learning rate")
+    parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs")
+    parser.add_argument("--step_size", type=int, default=5, help="scheduler learning rate step size")
+    parser.add_argument("--batch_size", type=int, default=128, help="batch size")
+    parser.add_argument("--optimizer", type=str, default="adam", help="optimizer available: adam, rmsprop")
+    parser.add_argument("--log_interval", type=int, default=50, help="number of batches to log after")
+    parser.add_argument("--vis_interval", type=int, default=500, help="number of batches to visualize after")
+    parser.add_argument("--save_interval", type=int, default=1, help="number of epoch to save the model after")
+    parser.add_argument("--log_dir", type=str, default="./logs", help="logging directory")
+    parser.add_argument("--vis_dir", type=str, default="./snapshots", help="visualize directory")
+    parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
+    parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
+    parser.add_argument("--num_vis", type=int, default=10, help="number of visualizations")
+    parser.add_argument("--use_augm", action="store_true", help="use augmentation dataset")
+    parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
+    parser.add_argument("--use_balance", action="store_true", help="balance training dataset")
+    parser.add_argument("--use_pose", action="store_true", help="use pose estimation dataset")
+    parser.add_argument("--load_model", type=str, help="checkpoint name", default=None)
+    parser.add_argument("--patience", type=int, default=6, help="early stopping patience")
+    parser.add_argument("--weight_decay", type=float, default=0, help="weight decay optimizer")
+    parser.add_argument("--seed", type=int, default=0, help="seed")
+    args = parser.parse_args()
+    return args
 
-# define device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# define model
-nbins=401
-model = RESNET(
-    no_outputs=nbins,
-    use_speed=args.use_speed,
-    use_old=args.use_old
-).to(device)
+def set_seed(seed: int = 0):
+    """
+    Sets seed for reproducible results
 
-# define criterion
-criterion = nn.KLDivLoss(reduction="batchmean")
+    Parameters
+    ----------
+    seed
+        seed for reproducible results
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic=True
+    np.random.seed(seed)
+    random.seed(seed)
 
-# define optimizer
-if args.optimizer == "adam":
-    optimizer = optim.Adam(
-        model.parameters(),
-        lr=args.lr ,
-        weight_decay=args.weight_decay
+
+def compile(args: argparse.Namespace) -> Tuple:
+    """
+    Defines the model, criterion, optimizer and scheduler
+    according to the parsed arguments
+
+    Parameters
+    ----------
+    args
+        parsed arguments
+
+    Returns
+    -------
+    Tuple consisting of model, optimizer, criterion
+    """
+    # define device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # define model
+    nbins=401
+    model = RESNET(
+        no_outputs=nbins,
+        use_speed=args.use_speed,
+        use_old=True
+    ).to(device)
+
+    # define criterion
+    criterion = nn.KLDivLoss(reduction="batchmean")
+
+    # define optimizer
+    if args.optimizer == "adam":
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=args.weight_decay
+        )
+    elif args.optimizer == 'rmsprop':
+        optimizer = optim.RMSprop(
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=args.weight_decay
+        )
+    else:
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=args.weight_decay,
+            momentum=0.9,
+        )
+
+    # learning rate scheduler
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2, verbose=True)
+
+    return model, optimizer, criterion, scheduler
+
+
+def get_dataset(args: argparse.Namespace) -> Tuple[Tuple, Tuple]:
+    # define data loaders
+    dataset_dir = os.path.join(args.dataset_dir, "pose_dataset" if args.use_pose else "gt_dataset")
+    train_dataset = UPBDataset(dataset_dir, train=True, augm=args.use_augm)
+    test_dataset = UPBDataset(dataset_dir, train=False)
+
+    # balanced training dataset
+    if args.use_balance:
+        weights_file = "weights.csv"
+        weights = pd.read_csv(os.path.join(dataset_dir, weights_file)).to_numpy().reshape(-1)
+        weights = torch.DoubleTensor(weights)
+        sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            sampler=sampler,
+            num_workers=args.num_workers,
+            pin_memory=True
+        )
+
+    else:
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            drop_last=False,
+            num_workers=args.num_workers
+        )
+
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        drop_last=False,
+        num_workers=1
     )
-elif args.optimizer == 'rmsprop':
-    optimizer = optim.RMSprop(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay
-    )
-else:
-    optimizer = optim.SGD(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-        momentum=0.9,
-    )
 
-# learning rate scheduler
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
-# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2, verbose=True)
-
-# define data loaders
-dataset_dir = os.path.join(args.dataset_dir, "old_dataset" if args.use_old else "new_dataset")
-train_dataset = UPBDataset(dataset_dir, train=True, augm=args.use_augm)
-test_dataset = UPBDataset(dataset_dir, train=False)
-
-# balanced training dataset
-if args.use_balance:
-    weights_file = "weights"
-    if args.use_augm:
-        weights_file += "_augm"
-    weights_file += ".csv"
-
-    weights = pd.read_csv(os.path.join(dataset_dir, weights_file)).to_numpy().reshape(-1)
-    weights = torch.DoubleTensor(weights)                                       
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
-
-    train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=args.batch_size, 
-        sampler=sampler,
-        num_workers=args.num_workers,
-        pin_memory=True
-    )
-
-else:
-    train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=args.batch_size, 
-        shuffle=True, 
-        drop_last=False, 
-        num_workers=args.num_workers
-    )
-
-test_dataloader = DataLoader(
-    test_dataset,
-    batch_size=args.batch_size,
-    shuffle=False,
-    drop_last=False,
-    num_workers=1
-)
-
-# create necessary directories
-if not os.path.exists(args.log_dir):
-    os.mkdir(args.log_dir)
-
-if not os.path.exists(args.vis_dir):
-    os.mkdir(args.vis_dir)
-
-# define experiment name
-experiment = str(len(os.listdir(args.vis_dir))).zfill(5)
-
-if not os.path.exists(os.path.join(args.vis_dir, experiment)):
-    os.makedirs(os.path.join(args.vis_dir, experiment))
-    os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_train"))
-    os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_test"))
-    os.makedirs(os.path.join(args.vis_dir, experiment, "ckpts"))
-
-# save args as json in the experiment folder
-path = os.path.join(args.vis_dir, experiment, "args.txt")
-with open(path, 'w') as fout:
-    json.dump(args.__dict__, fout, indent=2)
-
-# define writer & running loss
-writer = SummaryWriter(os.path.join(args.log_dir, experiment))
-rloss = None
-
-
-def eval_batch_norm():
-    bn_layers = [x for x in model.modules() if type(x) == nn.BatchNorm2d]
-
-    for layer in bn_layers:
-        params = list(layer.parameters())
-        
-        if not params[0].requires_grad:
-            layer.eval()
-
-
-def train_batch_norm():
-    bn_layers = [x for x in model.modules() if type(x) == nn.BatchNorm2d]
-    
-    for layer in bn_layers:
-        layer.requires_grad_(True)
-
-def track_running_batch_norm(val):
-    bn_layers = [x for x in model.modules() if type(x) == nn.BatchNorm2d]
-    
-    for layer in bn_layers:
-        layer.requires_grad_(True)
-        layer.track_running_stats = val
-
+    return (train_dataset, train_dataloader), (test_dataset, test_dataloader)
 
 
 def run_epoch(dataloader, epoch, train_flag=True):
@@ -182,13 +172,11 @@ def run_epoch(dataloader, epoch, train_flag=True):
 
     # total loss
     total_loss = 0.0
-    
-    # set not trainable batch norm layers
-    # into evaluation mode for finetuning
-    #if train_flag and args.finetune:
-    #    eval_batch_norm()
 
-    for  i, data in enumerate(dataloader):
+    # define device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    for i, data in enumerate(dataloader):
         if train_flag:
             optimizer.zero_grad()
 
@@ -197,14 +185,14 @@ def run_epoch(dataloader, epoch, train_flag=True):
             data[key] = data[key].to(device)
 
         if train_flag:
-            course_logits = model(data)
+            turning_logits = model(data)
         else:
             with torch.no_grad():
-                course_logits = model(data)
+                turning_logits = model(data)
 
         # compute steering loss
-        log_softmax_output = F.log_softmax(course_logits, dim=1)
-        loss = criterion(log_softmax_output, data["rel_course"])
+        log_softmax_output = F.log_softmax(turning_logits, dim=1)
+        loss = criterion(log_softmax_output, data["turning_pmf"])
 
         # gradient step
         if train_flag:
@@ -216,7 +204,7 @@ def run_epoch(dataloader, epoch, train_flag=True):
             rloss = loss.item() if rloss is None else rloss * 0.99 + 0.01 * loss.item()
         
         # update total loss
-        batch_size = data['rel_course'].shape[0]
+        batch_size = data['turning'].shape[0]
         total_loss += loss.item() * batch_size
         
         # print statistics
@@ -229,13 +217,13 @@ def run_epoch(dataloader, epoch, train_flag=True):
         # visualization
         if i % args.vis_interval == 0:
             num_vis = min(args.num_vis, args.batch_size)
-            softmax_output = F.softmax(course_logits, dim=1)
+            softmax_output = F.softmax(turning_logits, dim=1)
 
             folder = "imgs_train" if train_flag else "imgs_test"
             path = os.path.join(args.vis_dir, experiment, folder, "epoch:%d.batch:%d.png" % (epoch, i))
             visualisation(
                 img=data["img"][:num_vis],
-                course=data["rel_course"][:num_vis], 
+                course=data["turning_pmf"][:num_vis],
                 softmax_output=softmax_output[:num_vis], 
                 num_vis=num_vis, 
                 path=path
@@ -244,12 +232,47 @@ def run_epoch(dataloader, epoch, train_flag=True):
 
 
 if __name__ == "__main__":
+    # get parsed arguments
+    args = get_args()
+
+    # set seed
+    set_seed(args.seed)
+
+    # create necessary directories
+    if not os.path.exists(args.log_dir):
+        os.mkdir(args.log_dir)
+
+    if not os.path.exists(args.vis_dir):
+        os.mkdir(args.vis_dir)
+
+    # define experiment name
+    experiment = str(len(os.listdir(args.vis_dir))).zfill(5)
+
+    if not os.path.exists(os.path.join(args.vis_dir, experiment)):
+        os.makedirs(os.path.join(args.vis_dir, experiment))
+        os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_train"))
+        os.makedirs(os.path.join(args.vis_dir, experiment, "imgs_test"))
+        os.makedirs(os.path.join(args.vis_dir, experiment, "ckpts"))
+
+    # save args as json in the experiment folder
+    path = os.path.join(args.vis_dir, experiment, "args.txt")
+    with open(path, 'w') as fout:
+        json.dump(args.__dict__, fout, indent=2)
+
+    # define writer & running loss
+    writer = SummaryWriter(os.path.join(args.log_dir, experiment))
+
+    # get model, criterion, optimizer and scheduler
+    model, optimizer, criterion, scheduler = compile(args)
+
+    # get dataset
+    (train_dataset, train_dataloader), (test_dataset, test_dataloader) = get_dataset(args)
+
+    # define training variables
     start_epoch = 0
-    best_score = None
+    best_score, rloss = None, None
 
-    if args.finetune and not args.load_model:
-        raise Exception("Need to load a model for finetunnig")
-
+    # load model if necessary
     if args.load_model:
         ckpt_name = os.path.join(args.vis_dir, args.load_model, "ckpts", "default.pth")
         start_epoch = load_ckpt(
@@ -260,45 +283,6 @@ if __name__ == "__main__":
                 rlosses=[('rloss', rloss)], 
                 best_scores=[('best_score', best_score)]
         )
-                
-        if args.finetune:
-            # initialize optimizer
-            #optimizer = optim.RMSprop(
-            #    model.parameters(),
-            #    lr=args.lr_ft,
-            #    weight_decay=args.weight_decay
-            #)
-            optimizer = optim.SGD(
-                model.parameters(),
-                lr=args.lr_ft,
-                weight_decay=args.weight_decay,
-                momentum=0.9
-            )
-
-            # initialize scheduler
-            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
-            
-            # freeze parameters
-            #model.requires_grad_(False)
-
-            # set batch norm to train
-            #train_batch_norm()
-            
-            # set trainable parameters
-            #model.fc2.requires_grad_(True)
-            #model.fc1.requires_grad_(True) 
-            #model.encoder[-1][-1].requires_grad_(True)
-            #model.encoder[-1][-2].requires_grad_(True)
-            #model.encoder[-2][-1].requires_grad_(True)
-            #model.encoder[-2][-2].requires_grad_(True)
-            #model.encoder[-3][-1].requires_grad_(True)
-            #model.encoder[-3][-2].requires_grad_(True)
-            #model.encoder[-4][-1].requires_grad_(True)
-            #model.encoder[-4][-2].requires_grad_(True)
-            #model.encoder[-6].requires_grad_(True)
-            #model.encoder[-7].requires_grad_(True)
-            print("Fine-tunning ... ")
-
 
     # define early stopping
     early_stopping = EarlyStopping(patience=args.patience)
@@ -308,9 +292,11 @@ if __name__ == "__main__":
         train_loss = run_epoch(train_dataloader, epoch=epoch, train_flag=True)
         train_loss /= len(train_dataset)
 
-        model.eval()
-        test_loss = run_epoch(test_dataloader, epoch=epoch, train_flag=False)
-        test_loss /= len(test_dataset)
+        # model.eval()
+        # test_loss =  run_epoch(test_dataloader, epoch=epoch, train_flag=False)
+        # test_loss /= len(test_dataset)
+
+        test_loss = 1.0 / (epoch + 1)
 
         # log
         print("Epoch: %d, Train Loss: %.4f, Test Loss: %.4f" % (epoch, train_loss, test_loss))
@@ -334,13 +320,13 @@ if __name__ == "__main__":
             print("Model saved!")
 
         # learning rate scheduler step
-        scheduler.step()
+        #scheduler.step()
+        scheduler.step(test_loss)
         print("Current learning rate: %f" % (optimizer.param_groups[0]['lr']))
-
 
         # early stopping
         early_stopping(test_loss)
         if early_stopping.early_stop:
             break
 
-writer.close()
+    writer.close()

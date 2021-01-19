@@ -1,52 +1,52 @@
 #!/usr/bin/env python
 # coding: utf-8
-import os, sys, inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir) 
 
-
-import matplotlib.pyplot as plt
-import seaborn as sns; sns.set()
-import torch
-import numpy as np
-from tqdm import tqdm
-import pickle as pkl
-import pandas as pd
 import argparse
+from tqdm import tqdm
 from util.dataset import *
 
 # parse argument
 parser = argparse.ArgumentParser()
-parser.add_argument("--nclasses", type=int, default=6, help="number of bins for data balancing")
-parser.add_argument("--augm", action="store_true", help="include perspective augmentation into the dataset")
-parser.add_argument("--use_old", action="store_true", help="use the old dataset")
+parser.add_argument("--nclasses", type=int, default=5, help="number of bins for data balancing")
+parser.add_argument("--use_pose", action="store_true", help="use pose estimation dataset")
 args = parser.parse_args()
 
 # define dataset
-path_dataset = os.path.join("../dataset", "old_dataset" if args.use_old else "new_dataset")
-train_dataset = UPBDataset(path_dataset, train=True, augm=args.augm)
+path_dataset = os.path.join("dataset", "pose_dataset" if args.use_pose else "gt_dataset")
+train_dataset = UPBDataset(path_dataset, train=True)
 
 
-def compute_weights(nclasses=6):
+def get_index(x, a_min: float, a_max: float, nclasses: int):
+	assert a_min >= 0 and a_max > 0, "bounds should be positive"
+	assert a_min < a_max, "invalid bounds"
+
+	eps = 1e-6
+	x = np.abs(x)
+	x = np.clip(x, a_min, a_max - eps)
+	grid = np.linspace(a_min, a_max, nclasses + 1)
+	return np.sum(x >= grid) - 1
+
+
+def compute_weights(nclasses=5):
 	""" function to compute weights """
 	global train_dataset
 	
 	counts = [0] * nclasses
-	rel_course = [0] * len(train_dataset)
+	turning = [0] * len(train_dataset)
 	
 	for i in tqdm(range(len(train_dataset))):
-		rel_course[i] = int(np.clip(np.abs(train_dataset[i]['rel_course_val'].item()), 0, nclasses - 1))
-		counts[rel_course[i]] += 1
+		turning[i] = get_index(train_dataset[i]['turning'].item(), 0, 0.2, nclasses)
+		counts[turning[i]] += 1
 		
 	weights_per_class = [0.] * nclasses
 	N = np.sum(counts)
 	for i in range(nclasses):
-		weights_per_class[i] = N / float(nclasses * counts[i])
-	
+		if counts[i] > 0:
+			weights_per_class[i] = N / float(nclasses * counts[i])
+
 	weights = [0] * len(train_dataset)
-	for i in tqdm(range(len(rel_course))):
-		weights[i] = weights_per_class[rel_course[i]]
+	for i in tqdm(range(len(turning))):
+		weights[i] = weights_per_class[turning[i]]
 	return weights
 
 
@@ -67,15 +67,13 @@ if __name__ == "__main__":
 
 	# display a batch
 	data = next(iter(train_loader))
-	rel_course = data['rel_course_val'].numpy().reshape(-1)
-	rel_course = np.clip(np.abs(rel_course), 0, args.nclasses-1)
-	sns.distplot(rel_course, bins=args.nclasses)
+	turning = data['turning'].numpy().reshape(-1)
+	turning = np.abs(turning)
+	sns.distplot(turning, bins=args.nclasses)
 	plt.show()
 
 	# save to csv
 	path_weights = os.path.join(path_dataset, "weights")
-	if args.augm:
-		path_weights += "_augm"
 	path_weights += ".csv"
 
 	df = pd.DataFrame(data=weights, columns=["name"])

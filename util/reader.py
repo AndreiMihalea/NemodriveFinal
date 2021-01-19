@@ -1,18 +1,8 @@
 import os
 import cv2
-import utm
 import json
-import nemodata
 import numpy as np
-import matplotlib.pylab as plt
-
-from .vis import *
-from .transformation import Crop
-from .transformation import Convertor
-from .steering import *
-from nemodata.compression import Decompressor
-from PIL import Image
-
+from simulator.transformation import Crop
 
 class Reader(object):
     def __init__(self, root_dir: str, file: str, frame_rate: int):
@@ -63,34 +53,34 @@ class Reader(object):
     def video_length(self):
         raise NotImplementedError()
 
-    @staticmethod
-    def get_course(steer, speed, dt):
-        dist = speed * dt
-        delta = get_delta_from_steer(steer)
-        R = get_radius_from_delta(delta)
-        rad_course = dist / R
-        course = np.rad2deg(rad_course)
-        return course
-
-
 
 class JSONReader(Reader):
-    def __init__(self, root_dir: str, json_file: str, frame_rate: int=3):
+    def __init__(self, root_dir: str = None, json_file: str = None, frame_rate: int=3):
         """
         :param root_dir: root directory of the dataset
         :param json_file: file name
         :param frame_rate: frame rate of the desired dataset
         """
         super(JSONReader, self).__init__(root_dir, json_file, frame_rate)
-        self._read_json()
-        self.reset()
+
+        # define attributes
+        self.center_capture = None
+        self.frame_index = None
+        self.locations_index = None
+        self.init_northing = None
+        self.init_easting = None
+
+        # initialize objects
+        if root_dir:
+            self._read_json()
+            self.reset()
 
     def _read_json(self):
         # get data from json
         with open(os.path.join(self.root_dir, self.file)) as f:
             self.data = json.load(f)
 
-        # get cameras
+        # get camera
         self.center_camera = self.data['cameras'][0]
 
         # read locations list
@@ -101,7 +91,6 @@ class JSONReader(Reader):
         self.center_capture = cv2.VideoCapture(video_path)
         self.frame_index = -1
         self.locations_index = 0
-
 
     @property
     def K(self):
@@ -116,7 +105,7 @@ class JSONReader(Reader):
         """ Returns extrinsic camera matrix """
         return np.array([
             [1,  0, 0, 0.00],
-            [0, -1, 0, 1.65],
+            [0,  1, 0, 1.65],
             [0,  0, 1, 1.54],
             [0,  0, 0, 1]
         ])
@@ -127,7 +116,7 @@ class JSONReader(Reader):
 
     @staticmethod
     def crop_center(img: np.array):
-        return Crop.crop_center(img, up=0.1, down=0.5, left=0.25, right=0.25)
+        return Crop.crop_center(img, up=0.0, down=0.5, left=0.25, right=0.25)
 
     @staticmethod
     def resize_img(img: np.array):
@@ -167,232 +156,13 @@ class JSONReader(Reader):
         rel_course = JSONReader.get_relative_course(location['course'], next_location['course'])
         speed = location['speed']
 
-        # # initialize locations
-        # # TODO
-        # if not self.init_northing:
-        #     self.init_northing = location['northing']
-        #     self.init_easting = location['easting']
-        #
-        # # update location
-        # self.northing = location['northing']
-        # self.easting = location['easting']
+        # initialize locations
+        if not self.init_northing:
+            self.init_northing = location['northing']
+            self.init_easting = location['easting']
 
-        return frame[...,::-1], speed, rel_course
+        # update location
+        self.northing = location['northing']
+        self.easting = location['easting']
 
-
-def gaussian_dist(mean=200.0, std=5, nbins=401):
-    x = np.arange(401)
-    pdf = np.exp(-0.5 * ((x - mean) / std)**2)
-    pmf = pdf / pdf.sum()
-    return pmf
-
-
-class PKLReader(Reader):
-    def __init__(self, root_dir: str, pkl_file: str = None, frame_rate: int = 3):
-        super(PKLReader, self).__init__(root_dir, pkl_file, frame_rate)
-        self.root_dir = root_dir
-        self.pkl_file = pkl_file
-        self.frame_rate = frame_rate
-        self.frame_idx = -1
-        self.generator = self._create_generator()
-        # self.prev_packet = self.get_package()
-
-    def _create_generator(self):
-        dt = int(1.0 / self.frame_rate * 1000)
-        player = nemodata.VariableSampleRatePlayer(self.root_dir, min_packet_delay_ms=dt)
-        player.start()
-        return player.stream_generator()
-
-    @property
-    def K(self):
-        """ Returns intrinsic camera matrix """
-        return np.array([
-            [0.95, 0,  0.5],  # width
-            [0, 1.27, 0.55],  # height
-            [0,  0, 1]])
-
-    @property
-    def M(self):
-        """ Returns extrinsic camera matrix """
-        return np.array([
-            [1, 0, 0, 0.00],
-            [0, -1, 0, 1.65],
-            [0, 0, 1, 1.54],
-            [0, 0, 0, 1]
-        ])
-
-    @staticmethod
-    def crop_car(img: np.array):
-        return img[:380, ...]
-
-    @staticmethod
-    def crop_center(img: np.array):
-        return Crop.crop_center(img, up=0.0, left=0.25, right=0.25)
-
-    @staticmethod
-    def resize_img(img: np.array):
-        return cv2.resize(img, dsize=None, fx=0.8, fy=0.8)
-
-    @property
-    def video_length(self):
-        return (self.frame_idx + 1) / self.frame_rate
-
-    def get_package(self):
-        try:
-            packet = next(self.generator)
-            self.frame_idx += 1
-        except Exception as e:
-            return np.array([]), None, None
-
-        # get image
-        center_img = packet["images"]["center"]
-        center_img = cv2.resize(center_img, None, fx=0.3, fy=0.3)
-
-        # read GPS coordinates
-        # TODO
-        # if 'gps' in packet['sensor_data'] and 'RMC' in packet['sensor_data']['gps']:
-        #     lat_N = float(packet['sensor_data']['gps']['RMC'].latitude)
-        #     lon_E = float(packet['sensor_data']['gps']['RMC'].longitude)
-        #
-        #     # transform GPS coordinates to UTM (northing, easting)
-        #     easting, northing, _, _ = utm.from_latlon(latitude=lat_N, longitude=lon_E)
-        #
-        #     # initialize the location
-        #     if not self.init_northing:
-        #         self.init_northing = northing
-        #         self.init_easting = easting
-        #
-        #     # update northing & easting
-        #     self.northing = northing
-        #     self.easting = easting
-        #
-        #     print(f'Northing: {self.northing}, Easting: {self.easting}')
-
-        # # get rotation
-        # vals = packet["sensor_data"]["imu"]["orientation_quaternion"]
-        # q = [vals['x'], vals['y'], vals['z'], vals['w']]
-        # e = quat.quat2deg(q)
-    
-        # get speed value km/h
-        speed = packet["sensor_data"]["canbus"]["speed"]["value"]
-        steer = packet["sensor_data"]["canbus"]["steer"]["value"]
-        return center_img, speed, steer
-
-    def get_next_image(self):
-        packet = self.get_package()
-        
-        if len(packet[0]) == 0:
-            return packet
-
-        # TODO compute relative course
-        # rel_course = JSONReader.get_relative_course(self.prev_packet[2], new_packet[2])
-        img, speed, steer = packet
-        
-        # remove offset
-        OFFSET = -737.6
-        steer = None if steer == 0 else steer - OFFSET
-
-        # trasform from km/h to m/s
-        speed = Convertor.kmperh2mpers(speed)
-
-        
-        
-        # transform steering to course
-        rel_course = None
-
-        if steer:
-            dt = 1.0 / self.frame_rate
-            rel_course = Reader.get_course(steer, speed, dt)
-            rel_course = -rel_course # convention 
-                
-        # plotter
-        #dist = gaussian_dist(200 + 10 * rel_course)
-        #fig = plt.figure()
-        #plt.plot(dist)
-        #course_img = np.asarray(fig2img(fig, img.shape[1], img.shape[0]))
-        #plt.close(fig)
-        #full_img = np.concatenate([img, course_img], axis=1)
-        #print("speed", speed, "rel_course", rel_course)
-        #print("============")
-        #cv2.imshow("FULL", full_img)
-        #cv2.waitKey(0)
-
-        return img, speed, rel_course
-
-
-class PairReader(PKLReader):
-    def __init__(self, root_dir: str, file: str = None, frame_rate: int = 3):
-        """
-        Constructor
-        
-        For this class, only root_dir matters.
-        The parameters "file" and "frame_rate" are just for consistency 
-        """
-        super(PairReader, self).__init__(root_dir, file, frame_rate)
-        self.root_dir = root_dir
-        self.frame_idx = 0
-        self.generator = self._create_generator()
-
-    def _create_generator(self):
-        # filter images and data
-        files = os.listdir(self.root_dir)
-        path_imgs = filter(lambda x: x.endswith(".png"), files)
-        path_data = filter(lambda x: x.endswith(".pkl"), files)
-
-        # sort them to make sure that are paired
-        path_imgs = sorted(path_imgs)
-        path_data = sorted(path_data)
-
-        # add full path
-        path_imgs = [os.path.join(self.root_dir, x) for x in path_imgs]
-        path_data = [os.path.join(self.root_dir, x) for x in path_data]
-
-        for i in range(len(path_imgs)):
-            # read the image
-            img = Image.open(path_imgs[i])
-            img = np.asarray(img)
-
-            # read the data
-            with open(path_data[i], 'rb') as fin:
-                data = pkl.load(fin)
-            
-            yield img, data['speed'], data['rel_course']
-
-
-    def get_next_image(self):
-        try:
-            self.frame_idx += 1
-            return next(self.generator)
-        except Exception as e:
-            print(e)
-            return np.array([]), None, None
-
-
-if __name__ == "__main__":
-    use_old_data = False
-    old_dir = "/home/robert/PycharmProjects/upb_dataset"
-    old_file = "0e49f41acc2b428e.json"
-    
-
-    dirs = [
-        "/home/nemodrive/workspace/roberts/NemodriveFinalSplit/chunks/automatica_biotehnice_rectorat_forward_17_56_11_03_2020"
-    ]
-
-    for new_dir in dirs:
-
-        #new_dir =  '/media/nemodrive/Samsung_T5/nemodrive_upb2020/automatica/forward/13_28_10_29_2020'
-        #new_file = "metadata.pkl"
-        #reader = JSONReader(old_dir, old_file) if use_old_data else PKLReader(new_dir, new_file)
-        reader = PairReader(new_dir)
-
-        while True:
-            # get next frame corresponding to current prediction
-            # frame, _, _ = reader.get_next_image()
-            x = reader.get_next_image()
-
-            if x[0].size == 0:
-                break
-
-            cv2.imshow("FULL", x[0])
-            cv2.waitKey(0)
-
+        return frame[..., ::-1], speed, rel_course

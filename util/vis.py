@@ -1,13 +1,9 @@
+import cv2
+import torch
 import numpy as np
 import PIL.Image as pil
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use('Agg')
 
-from .dataset import *
-import torch
-import torch.nn.functional as F
-import cv2
 
 def fig2data(fig):
     """
@@ -15,6 +11,9 @@ def fig2data(fig):
     @param fig a matplotlib figure
     @return a numpy 3D array of RGBA values
     """
+    import matplotlib
+    matplotlib.use('Agg')
+
     # draw the renderer
     fig.canvas.draw()
  
@@ -30,6 +29,9 @@ def fig2img(fig, width, height):
     @param fig a matplotlib figure
     @return a Python Imaging Library ( PIL ) image
     """
+    import matplotlib
+    matplotlib.use('Agg')
+
     # put the figure pixmap into a numpy array
     buf = fig2data(fig)
     w, h, d = buf.shape
@@ -41,10 +43,12 @@ def fig2img(fig, width, height):
 HEIGHT = 256
 WIDTH = 512
 
+
 def plot_img(img: torch.tensor):
     plot = 255 * img.detach().cpu().numpy().transpose(1, 2, 0)
     plot = cv2.resize(plot, (WIDTH, HEIGHT))
     return plot
+
 
 def plot_distr(softmax_output, course):
     figure = plt.figure()
@@ -59,7 +63,7 @@ def plot_distr(softmax_output, course):
     return plot
 
 
-def visualisation(img, course, softmax_output, num_vis, path, save=False):
+def visualisation(img, course, softmax_output, num_vis, path, save=True):
     figs = []
 
     if img is None:
@@ -87,15 +91,24 @@ def visualisation(img, course, softmax_output, num_vis, path, save=False):
     return snapshot
 
 
-def gaussian_dist(mean=200.0, std=5, nbins=401):
-    x = np.arange(401)
+def gaussian_dist(mean=200., std=5, nbins=401):
+    x = np.arange(nbins)
     pdf = np.exp(-0.5 * ((x - mean) / std)**2)
     pmf = pdf / pdf.sum()
     return pmf
 
-def plot_obs_course(img: np.array, rel_course: float, verbose: bool = True):
+
+def normalize(img):
+    return img / 255.
+
+
+def unnormalize(img):
+    return (img * 255).astype(np.uint8)
+
+
+def plot_obs_course(img: np.array, turning: float, verbose: bool = True):
     # compute the gaussian distribution
-    dist = gaussian_dist(200 + 10 * rel_course)
+    dist = gaussian_dist(200 + 1000 * turning)
     
     # plot the distribution
     fig = plt.figure()
@@ -107,10 +120,9 @@ def plot_obs_course(img: np.array, rel_course: float, verbose: bool = True):
     # close current figure 
     plt.close(fig)
 
-    # compute the full_img as a concatentation
+    # compute the full_img as a concatenation
     # between the observation and the course distribution
     full_img = np.concatenate([img, course_img], axis=1)
-    #full_img = cv2.resize(full_img, None, fx=2, fy=2)
 
     # display if verbose
     if verbose:

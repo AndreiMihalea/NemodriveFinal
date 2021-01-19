@@ -4,14 +4,19 @@ import os
 import pandas as pd
 import argparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--train", type=str, help="path to the text file containing training scenes")
-parser.add_argument("--test", type=str, help="path to the text file containing test scenes")
-parser.add_argument("--use_old", action="store_true", help="use old dataset")
-args = parser.parse_args()
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train", type=str, help="path to the text file containing training scenes")
+    parser.add_argument("--test", type=str, help="path to the text file containing test scenes")
+    parser.add_argument("--use_pose", action="store_true", help="use pose estimation dataset")
+    args = parser.parse_args()
+    return args
 
 
 if __name__ == "__main__":
+    args = parse_args()
+
     # read training scenes
     with open(args.train, "rt") as fin:
         train_scenes = fin.read()
@@ -23,17 +28,13 @@ if __name__ == "__main__":
     train_scenes = train_scenes.split()
     test_scenes = test_scenes.split()
 
-    if not args.use_old:
-        train_scenes = [s.replace("/", "_") for s in train_scenes]
-        test_scenes = [s.replace("/", "_") for s in test_scenes]
-
     train_scenes = set(train_scenes)
     test_scenes = set(test_scenes)
     assert train_scenes.intersection(test_scenes) == set(), \
         "There is an overlap between the train and test scenes"
 
     # define paths
-    path = os.path.join("../dataset/", "old_dataset" if args.use_old else "new_dataset")
+    path = os.path.join("dataset", "pose" if args.use_pose else "gt" + "_dataset")
     path_img = os.path.join(path, "img_real")
     files = os.listdir(path_img)
 
@@ -54,7 +55,9 @@ if __name__ == "__main__":
     # save as csv
     train_csv = pd.DataFrame(train_files, columns=["name"])
     test_csv = pd.DataFrame(test_files, columns=["name"])
+
     path_train = os.path.join(path, "train_real.csv")
     path_test = os.path.join(path, "test_real.csv")
+
     train_csv.to_csv(path_train, index=False)
     test_csv.to_csv(path_test, index=False)

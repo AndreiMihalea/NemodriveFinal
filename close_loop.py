@@ -1,86 +1,44 @@
 from models.resnet import *
 from util.io import *
-from util.vis import *
 
-import torch
-import torch.nn.functional as F
-
-import os
 import argparse
 import itertools
+import random
+import os
 import pickle as pkl
 from tqdm import tqdm
-import numpy as np
-import random
-import PIL.Image as pil
 
-from util.reader import Reader, JSONReader, PKLReader, PairReader
-from util.evaluator import AugmentationEvaluator
-from util.plots import *
-from util.gradcam import *
+import torch.nn
+import torch.nn.functional as F
+
+from util.reader import JSONReader
+from simulator.evaluator import AugmentationEvaluator
+from simulator.plots import *
+
 import util.vis as vis
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--begin', type=int, help="starting video index", default=0)
-parser.add_argument('--end', type=int, help="ending video index", default=81)
-parser.add_argument('--load_model', type=str, help='name of the model', default='default')
-parser.add_argument('--use_speed', action='store_true', help='use speed of the vehicle')
-parser.add_argument('--use_old', action='store_true', help="use old dataset")
-parser.add_argument('--split_path', type=str, help='path to the file containing the test scenes (test_scenes.txt)')
-parser.add_argument('--data_path', type=str, help='path to the directory of raw dataset (.mov & .json)')
-parser.add_argument('--sim_dir', type=str, help='simulation directory', default='simulation')
-args = parser.parse_args()
-
-# set seed
-torch.manual_seed(0)
-np.random.seed(0)
-random.seed(0)
-
-# get available device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# define model
-nbins = 401
-experiment = ''
-model = RESNET(
-    no_outputs=nbins,
-    use_speed=args.use_speed,
-    use_old=args.use_old    
-).to(device)
-experiment += "resnet"
-model = model.to(device)
-
-# define GradCAM explainer
-gradcam = GradCAM(model, model.encoder[-1][-1])
-
-# load model
-path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
-load_ckpt(path, [('model', model)])
-model.eval()
-
-# construct simulation dirs
-if not os.path.exists(args.sim_dir):
-    os.mkdir(args.sim_dir)
+from util.vis import gaussian_dist, normalize, unnormalize
+from typing import Tuple
 
 
-# construct gaussian distribution
-def gaussian_distribution(mean=200.0, std=5, eps=1e-6):
-    x = np.arange(401)
-    mean = np.clip(mean, 0, 400)
-
-    # construct pdf
-    pdf = np.exp(-0.5 * ((x - mean) / std) ** 2)
-    pmf = pdf / (pdf.sum() + eps)
-    return pmf
-
-
-# processing frame
-def normalize(img):
-    return img / 255.
+def get_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--begin', type=int, help="starting video index", default=0)
+    parser.add_argument('--end', type=int, help="ending video index", default=81)
+    parser.add_argument('--load_model', type=str, help='name of the model', default='default')
+    parser.add_argument('--use_speed', action='store_true', help='use speed of the vehicle')
+    parser.add_argument('--use_old', action='store_true', help="use old dataset")
+    parser.add_argument('--split_path', type=str, help='path to the file containing the test scenes (test_scenes.txt)')
+    parser.add_argument('--data_path', type=str, help='path to the directory of raw dataset (.mov & .json)')
+    parser.add_argument('--sim_dir', type=str, help='simulation directory', default='simulation')
+    args = parser.parse_args()
+    return args
 
 
-def unnormalize(img):
-    return (img * 255).astype(np.uint8)
+def set_seed(seed: int = 0):
+    # set seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def process_frame(frame):
@@ -92,21 +50,65 @@ def process_frame(frame):
     return frame
 
 
-# output smoothing
+
 def moving_average(x, w):
+    """
+    Signal smoothing
+
+    Parameters
+    ----------
+    x
+        signal to be smoothed
+    w
+        window
+
+    Returns
+    -------
+    Smoothed signal
+    """
     return np.convolve(x, np.ones(w), 'same') / w
 
 
-def get_course(output, smooth=True):
+def get_turning(output, smooth=True) -> Tuple[float, np.ndarray]:
+    """
+    Computes the turning radius (actually  1/R) from the
+    output distribution
+
+    Parameters
+    ----------
+    output
+        predicted distribution
+    smooth
+        boolean flag to apply smoothing filter
+
+    Returns
+    -------
+    Most probable curvature and the smoothed output
+    """
     if smooth:
         output = moving_average(output, 5)
         output /= output.sum()
 
     index = np.argmax(output).item()
-    return (index - 200) / 10, output
+    return (index - 200) / 1000, output
 
 
-def make_prediction(frame, speed):
+def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tensor]:
+    """
+    Make prediction given the current observation
+
+    Parameters
+    ----------
+    frame
+        RGB observation
+    speed
+        current speed in [m/s]
+
+    Returns
+    -------
+    Most probable turning radius (actually 1/R) and the tensor distribution
+    """
+
     # preprocess data
     frame = process_frame(frame)
     speed = torch.tensor([[speed]]).to(device)
@@ -125,31 +127,16 @@ def make_prediction(frame, speed):
         # process the logits and get the course as the argmax
         toutput = F.softmax(toutput, dim=1)
         output = toutput.reshape(toutput.shape[1]).cpu().numpy()
-        course, output = get_course(output)
+        course, output = get_turning(output)
         toutput = torch.tensor(output.reshape(*toutput.shape)).to(device)
 
     return course, toutput
 
 
-
-def get_explanation(frame, speed, idx):
-    tframe = process_frame(frame)
-    tspeed = torch.tensor([[speed]])
-    data = {
-        "img": tframe,
-        "speed": tspeed
-    }
-    
-    with torch.enable_grad():
-        amap = gradcam(data, idx)
-    
-    amap = GradCAM.cam_vis(frame, amap)
-    return amap
-
-
-# close loop evaluation
 def test_video(root_dir: str, metadata: str, time_penalty=6,
                translation_threshold=1.5, rotation_threshold=0.2, verbose=True):
+
+    """ Close loop evaluation of a video """
 
     scene = metadata.split('.')[0]
     log_path = os.path.join(args.sim_dir, args.load_model, scene)
@@ -158,17 +145,14 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         os.makedirs(os.path.join(log_path, "imgs"))
 
     # buffers to store evaluation details
-    real_courses = []
-    predicted_courses = []
-    predicted_course_distributions = []
-    real_course_distributions = []
+    turnings = []
+    predicted_turnings = []
+
+    predicted_turning_distributions = []
+    turning_distributions = []
 
     # initialize reader
-    if args.use_old:
-        reader = JSONReader(root_dir=root_dir, json_file=metadata, frame_rate=3)
-    else:
-        path = os.path.join(root_dir, metadata)
-        reader = PairReader(root_dir=path)
+    reader = JSONReader(root_dir=root_dir, json_file=metadata, frame_rate=3)
 
     # initialize evaluators
     # check multiple parameters like time_penalty, distance threshold and angle threshold
@@ -181,7 +165,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     )
 
     # get first two frames of the video and make a prediction
-    frame, speed, real_course, interv = augm.reset()
+    frame, speed, turning, interv = augm.reset()
 
     with torch.no_grad():
         for idx in itertools.count():
@@ -190,37 +174,29 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
                 break
             
             # make prediction
-            pred_course, toutput = make_prediction(frame, speed)
-            next_frame, next_speed, next_real_course, interv = augm.step(pred_course)
+            pred_turning, toutput = make_prediction(frame, speed)
+            next_frame, next_speed, next_turning, interv = augm.step(pred_turning)
             
             if not interv:
                 # distribution for the ground truth course
-                real_course_distribution = gaussian_distribution(10 * (real_course + 20))
-                real_course_distributions.append(real_course_distribution)
+                turning_distribution = gaussian_dist(1000 * turning + 200)
+                turning_distributions.append(turning_distribution)
 
                 # distribution for the predicted course
-                predicted_course_distribution = gaussian_distribution(10 * (pred_course + 20))
-                predicted_course_distributions.append(predicted_course_distribution)
+                predicted_turning_distribution = gaussian_dist(1000 * pred_turning + 200)
+                predicted_turning_distributions.append(predicted_turning_distribution)
 
-                output = toutput.reshape(toutput.shape[1]).cpu().numpy()
-                predicted_courses.append(output)
-                real_courses.append(real_course)
+                # save values
+                turnings.append(turning)
+                predicted_turnings.append(pred_turning)
 
                 # construct full image
-                real_course_distribution = torch.tensor(real_course_distribution).unsqueeze(0)
+                turning_distribution = torch.tensor(turning_distribution).unsqueeze(0)
                 imgs_path = os.path.join(args.sim_dir, args.load_model, scene, "imgs", str(idx).zfill(5) + ".png")
-                full_img = visualisation(process_frame(frame), real_course_distribution, toutput, 1,
-                                         imgs_path).astype(np.uint8)
-
-                # get explanation using gradcam
-                idx = int(10 * (pred_course + 20))
-                amap = get_explanation(frame, speed, idx)
-                amap = cv2.resize(amap, (vis.WIDTH, vis.HEIGHT))
-                
-                # concatenate explaination (activation map) to the output
-                full_img = np.concatenate([full_img, amap], axis=1)
-
+                full_img = visualisation(process_frame(frame), turning_distribution, toutput,
+                                         1, imgs_path).astype(np.uint8)
             else:
+                # signla intervention by a blank screen
                 full_img = np.zeros((vis.HEIGHT, 3 * vis.WIDTH, 3)).astype(np.uint8)
 
             # save image
@@ -228,13 +204,13 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             pil_snapshot.save(imgs_path)
 
             if verbose:
-                    print("Predicted Course: %.2f, Real Course: %.2f, Speed: %.2f" % (pred_course, real_course, speed))
+                    print("Pred_Turning: %.3f, Turning: %.3f, Speed: %.2f" % (pred_turning, turning, speed))
                     cv2.imshow("State", full_img[..., ::-1])
                     cv2.waitKey(100)
 
             # update frame
             frame = next_frame
-            real_course = next_real_course
+            turning = next_turning
             speed = next_speed
 
     # get some statistics [mean distance till an intervention, mean angle till an intervention]
@@ -247,10 +223,10 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
     # save all data
     data = {
-        "real_courses": real_courses,
-        "predicted_courses": predicted_courses,
-        "predicted_course_distributions": predicted_course_distributions,
-        "real_course_distributions": real_course_distributions,
+        "turning": turnings,
+        "predicted_courses": predicted_turnings,
+        "predicted_course_distributions": predicted_turning_distributions,
+        "real_course_distributions": turning_distributions,
         "autonomy": augm.autonomy,
         "num_interventions": augm.number_interventions,
         "video_length": augm.video_length,
@@ -263,16 +239,39 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
 
 if __name__ == "__main__":
-    if args.use_old:
-        with open(args.split_path, 'rt') as fin:
-            files = fin.read()
+    # get arguments
+    args = get_args()
 
-        files = files.strip().split("\n")
-        files = [file + ".json" for file in files]   
-        files = files[args.begin:args.end]
-    else:
-        files = os.listdir(args.data_path)
+    # set seed
+    set_seed(0)
+
+    # get available device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # define model
+    nbins = 401
+    experiment = ''
+    model = RESNET(no_outputs=nbins).to(device)
+    experiment += "resnet"
+    model = model.to(device)
+
+    # load model
+    path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
+    load_ckpt(path, [('model', model)])
+    model.eval()
+
+    # construct simulation dirs
+    if not os.path.exists(args.sim_dir):
+        os.mkdir(args.sim_dir)
+
+    # get list of test scenes
+    with open(args.split_path, 'rt') as fin:
+        files = fin.read()
+
+    files = files.strip().split("\n")
+    files = [file + ".json" for file in files]
+    files = files[args.begin:args.end]
 
     # test video
-    for file in tqdm(files):
+    for file in tqdm(files[:5]):
         test_video(root_dir=args.data_path, metadata=file, verbose=False)
