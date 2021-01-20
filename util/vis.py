@@ -91,7 +91,7 @@ def visualisation(img, course, softmax_output, num_vis, path, save=True):
     return snapshot
 
 
-def gaussian_dist(mean=200., std=5, nbins=401):
+def gaussian_dist(mean=200., std=10, nbins=401):
     x = np.arange(nbins)
     pdf = np.exp(-0.5 * ((x - mean) / std)**2)
     pmf = pdf / pdf.sum()

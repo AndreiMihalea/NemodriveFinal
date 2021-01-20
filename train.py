@@ -30,7 +30,8 @@ def get_args() -> argparse.Namespace:
     Parsed arguments
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lr", type=float, default=1e-5, help="learning rate")
+    parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
+    parser.add_argument("--final_lr", type=float, default=1e-4, help="final learning rate")
     parser.add_argument("--num_epochs", type=int, default=10, help="number of epochs")
     parser.add_argument("--step_size", type=int, default=5, help="scheduler learning rate step size")
     parser.add_argument("--batch_size", type=int, default=128, help="batch size")
@@ -91,12 +92,7 @@ def compile(args: argparse.Namespace) -> Tuple:
 
     # define model
     nbins=401
-    model = RESNET(
-        no_outputs=nbins,
-        use_speed=args.use_speed,
-        use_old=True
-    ).to(device)
-
+    model = RESNET(no_outputs=nbins).to(device)
     #model = Simple(no_outputs=nbins).to(device)
 
     # define criterion
@@ -320,7 +316,7 @@ if __name__ == "__main__":
 
     for epoch in tqdm(range(start_epoch, args.num_epochs)):
         # learning rate scheduler
-        linear_lr_scheduler(optimizer, args.lr, 0.00001, epoch, args.num_epoch)
+        linear_lr_scheduler(optimizer, args.lr, args.final_lr, epoch, args.num_epochs)
         print("current learning rate: %f" % (optimizer.param_groups[0]['lr']))
 
         # train step        

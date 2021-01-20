@@ -50,7 +50,7 @@ class Transformation(object):
         P = np.delete(np.matmul(self.K, self.M), 1, 1)
         H = np.matmul(P, np.matmul(R, np.linalg.inv(P)))
 
-        rotated_image = cv2.warpPerspective(image, H, (image.shape[1], image.shape[0]), flags=cv2.INTER_LINEAR)
+        rotated_image = cv2.warpPerspective(image, H, (image.shape[1], image.shape[0]), flags=cv2.INTER_LINEAR,  borderMode=cv2.BORDER_REPLICATE)
         return rotated_image
 
 

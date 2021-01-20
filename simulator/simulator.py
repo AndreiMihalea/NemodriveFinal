@@ -147,6 +147,7 @@ class Simulator(object):
         if self.distance > R > 0 or self.distance < R < 0:
             self._add_penalty()
             frame = self._pipeline(img=frame, tx=0, ry=0)
+            print("Some circle check")
             return frame, True
 
         # estimate position of the real car
@@ -167,7 +168,7 @@ class Simulator(object):
         d1 /= np.linalg.norm(d1[0:2])
 
         # fitler predicted steer
-        # self.avg_predicted_steer = predicted_steer if self.avg_predicted_steer is None \
+        # self.avg_predicted_steer = predicted_steer if sel.avg_predicted_steer is None \
         #     else .5 * self.avg_predicted_steer + 0.5 * predicted_steer
         self.avg_predicted_steer = predicted_steer
 

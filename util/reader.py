@@ -116,7 +116,9 @@ class JSONReader(Reader):
 
     @staticmethod
     def crop_center(img: np.array):
-        return Crop.crop_center(img, up=0.0, down=0.5, left=0.25, right=0.25)
+        img = Crop.crop_center(img, up=0.0, down=0.5, left=0.25, right=0.25)
+        img = Crop.crop_center(img, up=0.35)
+        return img
 
     @staticmethod
     def resize_img(img: np.array):

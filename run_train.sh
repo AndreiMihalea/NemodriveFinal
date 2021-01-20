@@ -1,21 +1,21 @@
 #!/bin/bash
 
-NUM_EPOCHS=100
+NUM_EPOCHS=20
 STEP_SIZE=5
 PATIENCE=15
-BATCH_SIZE=128
-LR=0.001
-WEIGHT_DECAY=0.001
+BATCH_SIZE=256
+LR=0.01
+FINAL_LR=0.0001
+WEIGHT_DECAY=0.01
 OPTIMIZER=sgd
 
 VIS_INT=100
 LOG_INT=50
 DATASET_DIR=./dataset
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 # train model using 2D persepctive augmentation and append speed
-echo $MODEL" + SPEED + BALANCE + AUG"
 python train.py \
 	--batch_size $BATCH_SIZE \
 	--vis_int $VIS_INT \
@@ -27,7 +27,7 @@ python train.py \
 	--optimizer $OPTIMIZER \
 	--weight_decay $WEIGHT_DECAY\
 	--lr $LR \
+	--final_lr $FINAL_LR\
 	--seed 0\
 	--use_balance \
-#	--use_augm \
-#	--use_balance \
+	--use_augm \

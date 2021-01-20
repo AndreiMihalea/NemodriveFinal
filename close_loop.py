@@ -179,7 +179,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             
             if not interv:
                 # distribution for the ground truth course
-                turning_distribution = gaussian_dist(1000 * turning + 200)
+                turning_distribution = gaussian_dist(1000 * turning + 200, std=10)
                 turning_distributions.append(turning_distribution)
 
                 # distribution for the predicted course
@@ -205,8 +205,9 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
             if verbose:
                     print("Pred_Turning: %.3f, Turning: %.3f, Speed: %.2f" % (pred_turning, turning, speed))
+                    print("%.2f, %.2f" % (augm.simulator.distance, augm.simulator.angle))
                     cv2.imshow("State", full_img[..., ::-1])
-                    cv2.waitKey(100)
+                    cv2.waitKey(0)
 
             # update frame
             frame = next_frame

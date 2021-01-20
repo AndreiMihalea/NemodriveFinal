@@ -51,7 +51,7 @@ class UPBDataset(Dataset):
 
     def __getitem__(self, idx):
         do_aug = np.random.rand() > 0.5
-        do_paug = (np.random.rand() < 0.2) and self.augm
+        do_paug = (np.random.rand() < 0.5) and self.augm
 
         if do_aug and self.train:
             color_aug = transforms.ColorJitter.get_params(
@@ -82,16 +82,13 @@ class UPBDataset(Dataset):
         np_img = self.reader.crop_center(np_img)
         np_img = self.reader.resize_img(np_img)
 
-        # crop even further
-        np_img = Crop.crop_center(np_img, up=0.35)
-
         # transpose to [C, H, W] and normalize to [0, 1]
         np_img = np_img.transpose(2, 0, 1)
         np_img = normalize(np_img)
         
         # construct gaussian distribution
         # maximum  1/R = 1/5 = 0.2
-        turning = 1.0 / R
+        turning = np.clip(1.0 / R, -0.19, 0.19)
         pmf_turning = gaussian_dist(200 + 1000 * turning, std=10)
         
         # construct gaussina distribution 

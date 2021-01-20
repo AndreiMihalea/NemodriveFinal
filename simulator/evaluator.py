@@ -77,7 +77,6 @@ class AugmentationEvaluator:
         frame = self.reader.crop_car(frame)
         frame = self.reader.crop_center(frame)
         frame = self.reader.resize_img(frame)
-        frame = Crop.crop_center(frame, up=0.35)
         return frame
 
     def step(self, pred_turning=0.):
