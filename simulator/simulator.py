@@ -42,19 +42,19 @@ class Simulator(object):
 
     def _pipeline(self, img: np.array, tx: float = 0.0, ry: float = 0.0):
         # convension
-        tx, ry = -tx, -ry
+        ry = -ry
 
         # transform image to tensor
         img = np.asarray(img)
         height, width = img.shape[:2]
 
         # get intrinsic camera matrix
-        K = self.reader.K
+        K = self.reader.K.copy()
         K[0, :] *= width
         K[1, :] *= height
 
         # get the extrinsic camera matrix
-        M = self.reader.M
+        M = self.reader.M.copy()
         M = np.linalg.inv(M)[:3, :]
 
         # transformation object

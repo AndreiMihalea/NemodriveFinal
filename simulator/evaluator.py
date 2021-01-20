@@ -3,6 +3,7 @@ from simulator import steering
 
 from tqdm import tqdm
 from .transformation import *
+from simulator.transformation import Crop
 from util.reader import Reader, JSONReader
 
 
@@ -32,23 +33,6 @@ class AugmentationEvaluator:
         # set transformation matrix
         self.T = np.eye(3)
 
-    @staticmethod
-    def get_steer(course, speed, dt, eps=1e-8):
-        sgn = np.sign(course)
-        dist = speed * dt
-        R = dist / (np.deg2rad(abs(course)) + eps)
-        delta, _, _ = steering.get_delta_from_radius(R)
-        steer = sgn * steering.get_steer_from_delta(delta)
-        return steer
-
-    @staticmethod
-    def get_course(steer, speed, dt):
-        dist = speed * dt
-        delta = steering.get_delta_from_steer(steer)
-        R = steering.get_radius_from_delta(delta)
-        rad_course = dist / R
-        course = np.rad2deg(rad_course)
-        return course
 
     @staticmethod
     def get_relative_course(prev_course, crt_course):
@@ -80,15 +64,21 @@ class AugmentationEvaluator:
     def reset(self):
         self.packet = self.reader.get_next_image()
         frame, speed, rel_course = self.packet
+        
         dt = 1.0 / self.reader.frame_rate
         R = steering.get_radius_from_course(rel_course, speed, dt)
         turning = 1 / R
         
         # process frame
+        frame = self.process_frame(frame)
+        return frame, speed, turning, False
+
+    def process_frame(self, frame):
         frame = self.reader.crop_car(frame)
         frame = self.reader.crop_center(frame)
         frame = self.reader.resize_img(frame)
-        return frame, speed, turning, False
+        frame = Crop.crop_center(frame, up=0.35)
+        return frame
 
     def step(self, pred_turning=0.):
         """
@@ -107,8 +97,9 @@ class AugmentationEvaluator:
         steer = steering.get_steer_from_course(rel_course, speed, dt)
 
         # get predicted steering
-        pred_R = np.clip(1 / pred_turning, -1000, 1000)
-        pred_delta = steering.get_delta_from_steer(pred_R)
+        sgn = 1 if pred_turning >= 0 else -1
+        pred_R = sgn / (abs(pred_turning) + 1e-5)
+        pred_delta, _, _ = steering.get_delta_from_radius(pred_R)
         pred_steer = steering.get_steer_from_delta(pred_delta)
 
         # augment the view
@@ -125,9 +116,7 @@ class AugmentationEvaluator:
             R = steering.get_radius_from_course(rel_course, speed, dt)
             turning  = 1 / R
 
-            frame = self.reader.crop_car(frame)
-            frame = self.reader.crop_center(frame)
-            frame = self.reader.resize_img(frame)
+            frame = self.process_frame(frame) 
             return frame, speed, turning, True
 
         # update the frame with the simulated one
@@ -139,9 +128,7 @@ class AugmentationEvaluator:
         turning = 1 / R
 
         # process the image
-        frame = self.reader.crop_car(frame)
-        frame = self.reader.crop_center(frame)
-        frame = self.reader.resize_img(frame)
+        frame = self.process_frame(frame)
         return frame, speed, turning, False
 
     @property

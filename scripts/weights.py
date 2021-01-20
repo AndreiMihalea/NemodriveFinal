@@ -59,7 +59,7 @@ if __name__ == "__main__":
 	sampler = torch.utils.data.sampler.WeightedRandomSampler(tf_weights, len(tf_weights))
 	train_loader = DataLoader(
 		train_dataset,
-		batch_size=50,
+		batch_size=256,
 		sampler=sampler,
 		num_workers=4,
 		pin_memory=True

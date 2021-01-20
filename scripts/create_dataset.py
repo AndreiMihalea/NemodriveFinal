@@ -55,7 +55,7 @@ def read_data(metadata: str, path_img: str, path_data: str,
         except Exception as e:
             break
 
-        if frame.size == 0:
+        if next_frame.size == 0:
             break
         
         if (rel_course is None) or (abs(speed) < 1e-3):
@@ -70,7 +70,7 @@ def read_data(metadata: str, path_img: str, path_data: str,
         with open(data_path, "wb") as fout:
             # compute turning radius from relative course
             R = steering.get_radius_from_course(rel_course, speed, 1.0 / frame_rate)
-            pkl.dump({"speed": speed, "radius": R, "frame_rate": frame_rate}, fout)
+            pkl.dump({"speed": speed, "rel_course": rel_course, "radius": R, "frame_rate": frame_rate}, fout)
 
         # update frame count
         frame_idx += 1
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     # read the list of scenes
     files = os.listdir(args.root_dir)
-    metadata = [file for file in files if file.endswith(".json")][:5]
+    metadata = [file for file in files if file.endswith(".json")]
 
     # process all scenes
     for md in tqdm(metadata):

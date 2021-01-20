@@ -101,8 +101,6 @@ class PerspectiveAugmentator(object):
 
         # transformation object
         # after all transformation, for the old dataset we end up
-        # with an image shape of (154, 256), and for the new
-        # dataset with an image shape of (152, 248)
         transform = transformation.Transformation(K, M)
         output = transform.rotate_image(img, ry)
         output = transform.translate_image(output, tx)
@@ -148,19 +146,22 @@ class PerspectiveAugmentator(object):
             ry = sgnr * np.random.uniform(0.05, 0.12)
         else:
             if np.random.rand() < 0.5:
-                tx = sgnt * np.random.uniform(0.25, 1.75)
+                tx = sgnt * np.random.uniform(0.25, 1.5)
             else:
                 ry = sgnr * np.random.uniform(0.05, 0.25)
 
         # generate augmented image
         aug_img = PerspectiveAugmentator.pipeline(
             reader=reader, img=frame, tx=tx, ry=ry)
-
+        
         # generate augmented steering command
-        _, _, aug_R, _ = PerspectiveAugmentator.compute_command(
+        aug_steer, _, aug_R, _ = PerspectiveAugmentator.compute_command(
             data=[steer, speed, dt],
             translation=tx,
             rotation=ry,
         )
+        
+        # compute augmentation course
+        aug_course = steering.get_course_from_steer(aug_steer, speed, dt)
 
-        return aug_img, aug_R
+        return aug_img, aug_R, aug_course

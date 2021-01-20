@@ -1,10 +1,11 @@
 #!/bin/bash
 
 NUM_EPOCHS=100
-STEP_SIZE=100
+STEP_SIZE=5
+PATIENCE=15
 BATCH_SIZE=128
-LR=0.01
-WEIGHT_DECAY=0.1
+LR=0.001
+WEIGHT_DECAY=0.001
 OPTIMIZER=sgd
 
 VIS_INT=100
@@ -19,11 +20,14 @@ python train.py \
 	--batch_size $BATCH_SIZE \
 	--vis_int $VIS_INT \
 	--log_int $LOG_INT \
-	--use_balance \
 	--dataset_dir $DATASET_DIR \
 	--step_size $STEP_SIZE \
+	--patience $PATIENCE \
 	--num_epochs $NUM_EPOCHS \
 	--optimizer $OPTIMIZER \
 	--weight_decay $WEIGHT_DECAY\
 	--lr $LR \
-	#--use_aug \
+	--seed 0\
+	--use_balance \
+#	--use_augm \
+#	--use_balance \

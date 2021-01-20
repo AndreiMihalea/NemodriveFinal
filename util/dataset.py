@@ -21,7 +21,7 @@ class UPBDataset(Dataset):
         path = os.path.join(root_dir, "train_real.csv" if train else "test_real.csv")
         files = list(pd.read_csv(path)["name"])
         self.train = train
-        self.agum = augm
+        self.augm = augm
 
         self.imgs = [os.path.join(root_dir, "img_real", file + ".png") for file in files]
         self.data = [os.path.join(root_dir, "data_real", file + ".pkl") for file in files]
@@ -51,7 +51,7 @@ class UPBDataset(Dataset):
 
     def __getitem__(self, idx):
         do_aug = np.random.rand() > 0.5
-        do_paug = (np.random.rand() > 0.5) and self.agum
+        do_paug = (np.random.rand() < 0.2) and self.augm
 
         if do_aug and self.train:
             color_aug = transforms.ColorJitter.get_params(
@@ -68,10 +68,11 @@ class UPBDataset(Dataset):
         with open(self.data[idx], "rb") as fin:
             data = pkl.load(fin)
             R = data["radius"]
+            course = data["rel_course"]
 
         # perform perspective augmentation
         if do_paug:
-            np_img, R = PerspectiveAugmentator.augment(
+            np_img, R, course = PerspectiveAugmentator.augment(
                 reader=self.reader, frame=np_img, R=R,
                 speed=data["speed"], frame_rate=data["frame_rate"]
             )
@@ -87,17 +88,25 @@ class UPBDataset(Dataset):
         # transpose to [C, H, W] and normalize to [0, 1]
         np_img = np_img.transpose(2, 0, 1)
         np_img = normalize(np_img)
-
+        
         # construct gaussian distribution
         # maximum  1/R = 1/5 = 0.2
         turning = 1.0 / R
-        pmf = gaussian_dist(200 + 1000 * turning)
-
+        pmf_turning = gaussian_dist(200 + 1000 * turning, std=10)
+        
+        # construct gaussina distribution 
+        # for course
+        #course = np.clip(course, -20, 20)
+        #pmf_course = gaussian_dist(200 + 10 * course)
+        
         return {
             "img": torch.tensor(np_img).float(),
-            "turning_pmf": torch.tensor(pmf).float(),
+            "turning_pmf": torch.tensor(pmf_turning).float(),
             "turning": torch.tensor(turning).float(),
+            #"turning_pmf": torch.tensor(pmf_course).float(),
+            #"turning": torch.tensor(course).float(),
             "speed": torch.tensor(data["speed"]).unsqueeze(0).float()
+
         }
 
 

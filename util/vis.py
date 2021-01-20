@@ -106,7 +106,7 @@ def unnormalize(img):
     return (img * 255).astype(np.uint8)
 
 
-def plot_obs_course(img: np.array, turning: float, verbose: bool = True):
+def plot_obs_turning(img: np.array, turning: float, verbose: bool = True):
     # compute the gaussian distribution
     dist = gaussian_dist(200 + 1000 * turning)
     

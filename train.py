@@ -9,6 +9,8 @@ import os
 import pandas as pd
 
 from models.resnet import *
+from models.simple import *
+
 from util.vis import *
 from util.io import *
 from util.early import *
@@ -39,7 +41,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--log_dir", type=str, default="./logs", help="logging directory")
     parser.add_argument("--vis_dir", type=str, default="./snapshots", help="visualize directory")
     parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
-    parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
+    parser.add_argument("--num_workers", type=int, default=10, help="number of workers for dataloader")
     parser.add_argument("--num_vis", type=int, default=10, help="number of visualizations")
     parser.add_argument("--use_augm", action="store_true", help="use augmentation dataset")
     parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
@@ -95,6 +97,8 @@ def compile(args: argparse.Namespace) -> Tuple:
         use_old=True
     ).to(device)
 
+    #model = Simple(no_outputs=nbins).to(device)
+
     # define criterion
     criterion = nn.KLDivLoss(reduction="batchmean")
 
@@ -121,8 +125,8 @@ def compile(args: argparse.Namespace) -> Tuple:
 
     # learning rate scheduler
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.1)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2, verbose=True)
-
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=args.step_size, verbose=True)
+    scheduler = None
     return model, optimizer, criterion, scheduler
 
 
@@ -153,7 +157,7 @@ def get_dataset(args: argparse.Namespace) -> Tuple[Tuple, Tuple]:
             batch_size=args.batch_size,
             shuffle=True,
             drop_last=False,
-            num_workers=args.num_workers
+            num_workers=args.num_workers // 2
         )
 
     test_dataloader = DataLoader(
@@ -161,7 +165,7 @@ def get_dataset(args: argparse.Namespace) -> Tuple[Tuple, Tuple]:
         batch_size=args.batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=1
+        num_workers=args.num_workers // 2
     )
 
     return (train_dataset, train_dataloader), (test_dataset, test_dataloader)
@@ -231,6 +235,33 @@ def run_epoch(dataloader, epoch, train_flag=True):
     return total_loss
 
 
+def linear_lr_scheduler(optimizer, init_lr, final_lr, epoch, max_epoch):
+    """
+    Linear learning rate scheduler.
+    Decreasease learning rate linear with epoch.
+
+    Parameters
+    ----------
+    optimizer
+        parameters optimizer
+    init_lr
+        initial learning rate
+    final_lr
+        final learning rate
+    epoch
+        current epoch
+    max_epoch
+        final epoch
+    """
+    
+    alpha = epoch / max_epoch
+    lr = init_lr * (1 - alpha) + final_lr * alpha
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
+
+
 if __name__ == "__main__":
     # get parsed arguments
     args = get_args()
@@ -288,15 +319,20 @@ if __name__ == "__main__":
     early_stopping = EarlyStopping(patience=args.patience)
 
     for epoch in tqdm(range(start_epoch, args.num_epochs)):
+        # learning rate scheduler
+        linear_lr_scheduler(optimizer, args.lr, 0.00001, epoch, args.num_epoch)
+        print("current learning rate: %f" % (optimizer.param_groups[0]['lr']))
+
+        # train step        
         model.train()
         train_loss = run_epoch(train_dataloader, epoch=epoch, train_flag=True)
         train_loss /= len(train_dataset)
 
-        # model.eval()
-        # test_loss =  run_epoch(test_dataloader, epoch=epoch, train_flag=False)
-        # test_loss /= len(test_dataset)
+        # test step
+        model.eval()
+        test_loss =  run_epoch(test_dataloader, epoch=epoch, train_flag=False)
+        test_loss /= len(test_dataset)
 
-        test_loss = 1.0 / (epoch + 1)
 
         # log
         print("Epoch: %d, Train Loss: %.4f, Test Loss: %.4f" % (epoch, train_loss, test_loss))
@@ -321,9 +357,8 @@ if __name__ == "__main__":
 
         # learning rate scheduler step
         #scheduler.step()
-        scheduler.step(test_loss)
-        print("Current learning rate: %f" % (optimizer.param_groups[0]['lr']))
-
+        #scheduler.step(test_loss)
+        
         # early stopping
         early_stopping(test_loss)
         if early_stopping.early_stop:

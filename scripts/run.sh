@@ -4,9 +4,11 @@
 ############################# CREATE DATASET WITHOUT AUGMENTATION ##############
 ################################################################################
 
+ROOT_DIR=/home/nemodrive/workspace/roberts/UPB_dataset/old_dataset
+
 ## for the old dataset
 python -m scripts.create_dataset \
- --root_dir /home/robert/PycharmProjects/upb_dataset\
+ --root_dir $ROOT_DIR\
  --frame_rate 3\
 
 ########################################################################

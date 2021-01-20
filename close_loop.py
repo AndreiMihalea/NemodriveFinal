@@ -197,7 +197,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
                                          1, imgs_path).astype(np.uint8)
             else:
                 # signla intervention by a blank screen
-                full_img = np.zeros((vis.HEIGHT, 3 * vis.WIDTH, 3)).astype(np.uint8)
+                full_img = np.zeros((vis.HEIGHT, 2 * vis.WIDTH, 3)).astype(np.uint8)
 
             # save image
             pil_snapshot = pil.fromarray(full_img.astype(np.uint8))
@@ -273,5 +273,5 @@ if __name__ == "__main__":
     files = files[args.begin:args.end]
 
     # test video
-    for file in tqdm(files[:5]):
+    for file in tqdm(files[:10]):
         test_video(root_dir=args.data_path, metadata=file, verbose=False)

@@ -34,4 +34,5 @@ if __name__ == "__main__":
 
         # plot data
         print(dict_data)
-        plot_obs_course(np_img, 1 / dict_data['radius'], verbose=True)
+        #plot_obs_course(np_img, 1 / dict_data['radius'], verbose=True)
+        plot_obs_turning(np_img, dict_data["rel_course"] / 100, verbose=True)
