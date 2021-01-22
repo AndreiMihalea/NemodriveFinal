@@ -6,6 +6,7 @@ import pickle as pkl
 from util.vis import *
 from util.reader import JSONReader
 from simulator import steering
+from pose.pose_estimation import PoseEstimation
 
 
 def parse_args():
@@ -42,10 +43,19 @@ def read_data(metadata: str, path_img: str, path_data: str,
         verbose flag to display images while generating them
     """
 
+    # define dataset reader
     reader = JSONReader(args.root_dir, metadata, frame_rate=frame_rate)
+
+    # load pose estimation if necessary
+    pose_estimator = None
+    if args.use_pose:
+        pose_estimator = PoseEstimation(256, 832, 'pose/ckpts/cs+k_pose.tar')
+
+    # extract scene name and reset frame index
     scene = metadata.split(".")[0]
     frame_idx = 0
 
+    # read the first frame from the video
     frame, speed, rel_course = reader.get_next_image()
 
     while True:
@@ -68,8 +78,15 @@ def read_data(metadata: str, path_img: str, path_data: str,
         # save data
         data_path = os.path.join(path_data, scene + "." + str(frame_idx).zfill(5) + ".pkl")
         with open(data_path, "wb") as fout:
-            # compute turning radius from relative course
-            R = steering.get_radius_from_course(rel_course, speed, 1.0 / frame_rate)
+            if args.use_pose:
+                # use pose estimator for labeling
+                pose = pose_estimator.get_pose(frame, next_frame, 53, (0, 0, 0.1, 0.1))
+                R = pose_estimator.compute_radius_from_pose(pose)
+            else:
+                # compute turning radius from relative course
+                R = steering.get_radius_from_course(rel_course, speed, 1.0 / frame_rate)
+
+            # save data
             pkl.dump({"speed": speed, "rel_course": rel_course, "radius": R, "frame_rate": frame_rate}, fout)
 
         # update frame count
@@ -114,7 +131,7 @@ if __name__ == "__main__":
     metadata = [file for file in files if file.endswith(".json")]
 
     # process all scenes
-    for md in tqdm(metadata):
+    for md in tqdm(metadata[:10]):
         read_data(
             metadata=md,
             path_img=path_img,
