@@ -17,11 +17,13 @@ from util.vis import gaussian_dist, normalize
 
 
 class UPBDataset(Dataset):
-    def __init__(self, root_dir: str, train: bool = True, augm: bool = False):
+    def __init__(self, root_dir: str, train: bool = True, augm: bool = False, 
+            synth: bool = False, scale: float = 1.0):
         path = os.path.join(root_dir, "train_real.csv" if train else "test_real.csv")
         files = list(pd.read_csv(path)["name"])
         self.train = train
         self.augm = augm
+        self.scale = scale
 
         self.imgs = [os.path.join(root_dir, "img_real", file + ".png") for file in files]
         self.data = [os.path.join(root_dir, "data_real", file + ".pkl") for file in files]
@@ -46,42 +48,85 @@ class UPBDataset(Dataset):
         # other cropping operations
         self.reader = JSONReader()
 
+        # buffer for synthethic dataset transformation
+        self.synth_buff = []
+        self.synth = synth
+
+        # if generating synthetic dataset for testing
+        if synth:
+            self.synth_buff = [self.__sample() for i in range(len(self.imgs))]
+
+    
+    def __sample(self):
+        tx, ry = 0., 0.
+        sgnt = 1 if np.random.rand() > 0.5 else -1
+        sgnr = 1 if np.random.rand() > 0.5 else -1
+
+        # generate random transformation
+        if np.random.rand() < 0.33:
+            tx = sgnt * np.random.uniform(0.5, 1.2)
+            ry = sgnr * np.random.uniform(0.05, 0.12)
+        else:
+            if np.random.rand() < 0.5:
+                tx = sgnt * np.random.uniform(0.5, 1.5)
+            else:
+                ry = sgnr * np.random.uniform(0.05, 0.25)
+        return tx, ry
+
+
     def __len__(self):
         return len(self.imgs)
 
+
     def __getitem__(self, idx):
+        # get the color augmentation and the perspective
+        # augmentation flags
         do_aug = np.random.rand() > 0.5
         do_paug = (np.random.rand() < 0.5) and self.augm
-
-        if do_aug and self.train:
-            color_aug = transforms.ColorJitter.get_params(
-                self.brightness, self.contrast, self.saturation, self.hue)
-        else:
-            color_aug = (lambda x: x)
-
-        # read image & perform color augmentation
+        
+        # read the image
         img = pil.open(self.imgs[idx])
-        img = color_aug(img)
-        np_img = np.asarray(img)
-
+        
         # read ground truth turning radius
         with open(self.data[idx], "rb") as fin:
             data = pkl.load(fin)
-            R = data["radius"]
+            R = data["radius"] * self.scale
             course = data["rel_course"]
 
-        # perform perspective augmentation
-        if do_paug:
+        # if test and generat synthetic
+        if not self.train and self.synth:
+            np_img = np.asarray(img)
+            
+            # augment with a predefined tx and ry
             np_img, R, course = PerspectiveAugmentator.augment(
                 reader=self.reader, frame=np_img, R=R,
-                speed=data["speed"], frame_rate=data["frame_rate"]
+                speed=data["speed"], frame_rate=data["frame_rate"],
+                transf=self.synth_buff[idx]
             )
+
+        else:
+            # color augmentation object
+            if do_aug and self.train:
+                color_aug = transforms.ColorJitter.get_params(
+                    self.brightness, self.contrast, self.saturation, self.hue)
+            else:
+                color_aug = (lambda x: x)
+
+            # read image & perform color augmentation
+            img = color_aug(img)
+            np_img = np.asarray(img)
+
+            # perform perspective augmentation
+            if do_paug:
+                np_img, R, course = PerspectiveAugmentator.augment(
+                    reader=self.reader, frame=np_img, R=R,
+                    speed=data["speed"], frame_rate=data["frame_rate"]
+                )
 
         # process frame
         np_img = self.reader.crop_car(np_img)
         np_img = self.reader.crop_center(np_img)
         np_img = self.reader.resize_img(np_img)
-
         # transpose to [C, H, W] and normalize to [0, 1]
         np_img = np_img.transpose(2, 0, 1)
         np_img = normalize(np_img)

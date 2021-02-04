@@ -2,13 +2,18 @@ import torch
 import torch.nn
 import torch.nn.functional as F
 
+
 import os
 import argparse
+import numpy as np
+import random
 
 from models.resnet import *
 from util.dataset import *
 from util.io import *
+from util.vis import gaussian_dist
 from tqdm import tqdm
+
 
 
 def get_args() -> argparse.Namespace:
@@ -16,10 +21,10 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int, default=12, help="batch size")
     parser.add_argument("--dataset_dir", type=str, default="./dataset", help="dataset directory")
     parser.add_argument("--num_workers", type=int, default=4, help="number of workers for dataloader")
-    parser.add_argument("--use_speed", action="store_true", help="append speed to nvidia model")
     parser.add_argument("--use_pose", action="store_true", help="use pose dataset")
     parser.add_argument("--load_model", type=str, help="checkpoint name", default=None)
-    parser.add_argument("--model", type=str, help="[resnet]", default="resnet")
+    parser.add_argument("--use_synth", action="store_true", help="use synthetic dataset")
+    parser.add_argument("--use_baseline", action="store_true", help="evalutate baseline ")
     args = parser.parse_args()
     return args
 
@@ -34,13 +39,36 @@ def main(model: torch.nn.Module, test_dataloader: DataLoader):
                 data[key] = data[key].to(device)
 
             # get output
-            turning_logits = model(data)
-
-            # compute steering loss
-            log_softmax_output = F.log_softmax(turning_logits, dim=1)
+            if args.use_baseline:
+                eps = 1e-16
+                softmax_output = torch.tensor(gaussian_dist(200, std=10)).unsqueeze(0).float()
+                log_softmax_output = torch.log(softmax_output + eps).to(device)
+            else:
+                with torch.no_grad():
+                    turning_logits = model(data)
+                    log_softmax_output = F.log_softmax(turning_logits, dim=1)
+            
             kl = criterion(log_softmax_output, data["turning_pmf"])
             kl = kl.sum(dim=1).cpu().numpy()
             losses += list(kl)
+
+            verbose = False
+            if verbose:
+                img = data["img"][0].cpu().numpy().transpose((1, 2, 0))
+                if args.use_baseline:
+                    pred = softmax_output[0].cpu().numpy()
+                else:    
+                    pred = F.softmax(turning_logits, dim=1)[0].cpu().numpy()
+                
+                gt = data["turning_pmf"][0].cpu().numpy()
+                
+                import matplotlib.pyplot as plti
+                fig, axs = plt.subplots(2)
+                print(img.shape)
+                axs[0].imshow(img)
+                axs[1].plot(np.arange(len(pred)), pred)
+                axs[1].plot(np.arange(len(pred)), gt)
+                plt.show()
 
     results = {
         "model": args.load_model,
@@ -60,17 +88,18 @@ if __name__ == "__main__":
 
     # set seed
     torch.manual_seed(0)
+    np.random.seed(0)
+    random.seed(0)
 
     # define device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # define model
     model, nbins = None, 401
-    if args.model == "resnet":
-        model = RESNET(no_outputs=nbins).to(device)
+    model = RESNET(no_outputs=nbins).to(device)
 
     # load model
-    path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
+    path = os.path.join("snapshots_scale", args.load_model, "ckpts", "default.pth")
     load_ckpt(path, [('model', model)])
     model.eval()
 
@@ -79,7 +108,7 @@ if __name__ == "__main__":
 
     # define dataloader
     dataset_dir = os.path.join(args.dataset_dir, "pose_dataset" if args.use_pose else "gt_dataset")
-    test_dataset = UPBDataset(dataset_dir, train=True)
+    test_dataset = UPBDataset(dataset_dir, train=False)
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
@@ -90,11 +119,12 @@ if __name__ == "__main__":
 
     results = main(model, test_dataloader)
     print(results)
-
-    if not os.path.exists("./results"):
-        os.mkdir("./results")
+    
+    results_path = "./results_scale"
+    if not os.path.exists(results_path):
+        os.mkdir(results_path)
         
-    path = os.path.join("./results", args.load_model)
+    path = os.path.join(results_path, args.load_model)
     if not os.path.exists(path):
         os.makedirs(path)
 

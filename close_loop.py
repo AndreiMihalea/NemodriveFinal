@@ -1,4 +1,6 @@
 from models.resnet import *
+from models.pilot import *
+
 from util.io import *
 
 import argparse
@@ -30,6 +32,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument('--split_path', type=str, help='path to the file containing the test scenes (test_scenes.txt)')
     parser.add_argument('--data_path', type=str, help='path to the directory of raw dataset (.mov & .json)')
     parser.add_argument('--sim_dir', type=str, help='simulation directory', default='simulation')
+    parser.add_argument('--use_baseline', action='store_true', help='predict 0 degrees always')
     args = parser.parse_args()
     return args
 
@@ -125,7 +128,10 @@ def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tenso
         toutput = model(data)
 
         # process the logits and get the course as the argmax
-        toutput = F.softmax(toutput, dim=1)
+        if args.use_baseline:
+            toutput = torch.tensor(gaussian_dist(200, std=10)).unsqueeze(0).float()
+        else:
+            toutput = F.softmax(toutput, dim=1)
         output = toutput.reshape(toutput.shape[1]).cpu().numpy()
         course, output = get_turning(output)
         toutput = torch.tensor(output.reshape(*toutput.shape)).to(device)
@@ -251,15 +257,15 @@ if __name__ == "__main__":
 
     # define model
     nbins = 401
-    experiment = ''
     model = RESNET(no_outputs=nbins).to(device)
-    experiment += "resnet"
+    # model = PilotNet(no_outputs=nbins).to(device)
     model = model.to(device)
 
     # load model
-    path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
-    load_ckpt(path, [('model', model)])
-    model.eval()
+    if not args.use_baseline:
+        path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
+        load_ckpt(path, [('model', model)])
+        model.eval()
 
     # construct simulation dirs
     if not os.path.exists(args.sim_dir):
@@ -271,8 +277,8 @@ if __name__ == "__main__":
 
     files = files.strip().split("\n")
     files = [file + ".json" for file in files]
-    files = files[args.begin:args.end]
+    files = files[args.begin:args.end]#[24:]
 
     # test video
-    for file in tqdm(files[:10]):
+    for file in tqdm(files):
         test_video(root_dir=args.data_path, metadata=file, verbose=False)

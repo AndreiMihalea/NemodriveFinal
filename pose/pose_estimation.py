@@ -61,8 +61,11 @@ class PoseEstimation(object):
         -------
         Processed image
         """
-        img_height, img_width, _ = img.shape
-        proc_img = img.copy()
+        # resize the image to the desired shape
+        proc_img = imresize(img, (self.img_height, self.img_width)).astype(np.float32)
+
+        # get image height and width
+        img_height, img_width, _ = proc_img.shape
 
         # compute the new sizes
         new_top = int(crop_top * img_height)
@@ -73,16 +76,12 @@ class PoseEstimation(object):
         # crop the image
         proc_img = proc_img[new_top:new_bot, new_left:new_right]
 
-        # resize the image to the desired shape
-        proc_img = imresize(proc_img, (self.img_height, self.img_width)).astype(np.float32)
-
         # transform it to tensor
         proc_img = np.transpose(proc_img, (2, 0, 1))
-        proc_img = ((torch.from_numpy(proc_img).unsqueeze(0) / 255. - 0.5) / 0.5).to(self.device)
+        proc_img = ((torch.from_numpy(proc_img).unsqueeze(0) - 0.5) / 0.5).to(self.device)
         return proc_img
 
-    def get_pose(self, frame: np.ndarray, next_frame: np.ndarray, translation_scale: float,
-                        crops: tuple = (0, 0, 0, 0)) -> torch.tensor:
+    def get_pose(self, frame: np.ndarray, next_frame: np.ndarray, crops: tuple = (0, 0, 0, 0)) -> torch.tensor:
         """
         Parameters
         ----------
@@ -90,8 +89,6 @@ class PoseEstimation(object):
             frame at time t
         next_frame
             frame at time t + 1
-        translation_scale
-            scale factor for the translation
         crops
             tuple containing the percentage to be cropped
             from the image as: crop_left, crop_right, crop_bot, crop_top
@@ -107,7 +104,6 @@ class PoseEstimation(object):
 
         with torch.no_grad():
             pose = self.pose_net(tensor_img1, tensor_img2)
-            pose[:, :3] *= translation_scale
 
         return pose
 
@@ -126,7 +122,7 @@ class PoseEstimation(object):
         """
         pose = pose.view(-1).cpu().numpy()
         assert len(pose) == 6
-
+        
         # extract translation on x and z axis
         # and the rotation on y axis
         tx, _,  tz = pose[:3]
@@ -138,5 +134,6 @@ class PoseEstimation(object):
 
         # compute turning radius using
         # generealized Pitagora's theorem
-        R = d / np.sqrt(2 * (1 - np.cos(ry)))
+        eps = 1e-12
+        R = -np.sign(ry) * d / np.sqrt(2 * max(1 - np.cos(ry), eps))
         return R

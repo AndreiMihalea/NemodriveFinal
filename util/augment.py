@@ -108,7 +108,8 @@ class PerspectiveAugmentator(object):
 
     @staticmethod
     def augment(reader: Reader, frame: np.ndarray, R: float,
-                speed: float,  frame_rate: int=3) -> Tuple[np.ndarray, float]:
+            speed: float,  frame_rate: int=3, 
+            transf: Tuple[float, float] = None) -> Tuple[np.ndarray, float]:
         """
         Augments a given image with the corresponding command
         by sampling at random the translation and the rotation
@@ -125,7 +126,11 @@ class PerspectiveAugmentator(object):
             vehicle's speed [m/s]
         frame_rate
             video's frame rate
-
+        transf
+            tuple containing the transformation applied,
+            tx - translation on ox axis, and 
+            ry - rotation on oy axis
+        
         Returns
         -------
         Tuple containing the augmented image, and turning radius
@@ -139,16 +144,21 @@ class PerspectiveAugmentator(object):
         tx, ry = 0.0, 0.0
         sgnt = 1 if np.random.rand() > 0.5 else -1
         sgnr = 1 if np.random.rand() > 0.5 else -1
-
-        # generate random transformation
-        if np.random.rand() < 0.33:
-            tx = sgnt * np.random.uniform(0.25, 1.2)
-            ry = sgnr * np.random.uniform(0.05, 0.12)
+        
+        # unpack the transformation if sent as a parameter
+        # else generate a random one
+        if transf is not None:
+            tx, ry = transf
         else:
-            if np.random.rand() < 0.5:
-                tx = sgnt * np.random.uniform(0.25, 1.5)
+            # generate random transformation
+            if np.random.rand() < 0.33:
+                tx = sgnt * np.random.uniform(0.5, 1.2)
+                ry = sgnr * np.random.uniform(0.05, 0.12)
             else:
-                ry = sgnr * np.random.uniform(0.05, 0.25)
+                if np.random.rand() < 0.5:
+                    tx = sgnt * np.random.uniform(0.5, 1.5)
+                else:
+                    ry = sgnr * np.random.uniform(0.05, 0.25)
 
         # generate augmented image
         aug_img = PerspectiveAugmentator.pipeline(

@@ -122,7 +122,7 @@ class JSONReader(Reader):
 
     @staticmethod
     def resize_img(img: np.array):
-        return cv2.resize(img, dsize=None, fx=0.8, fy=0.8)
+        return cv2.resize(img, dsize=(200, 66))
 
     @staticmethod
     def get_relative_course(prev_course, crt_course):

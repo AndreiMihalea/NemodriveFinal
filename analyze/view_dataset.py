@@ -6,7 +6,7 @@ from util.vis import *
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_dir", type=str, default="dataset/gt_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/pose_dataset")
     args = parser.parse_args()    
     
     imgs_path = os.path.join(args.dataset_dir, "img_real")
@@ -34,5 +34,5 @@ if __name__ == "__main__":
 
         # plot data
         print(dict_data)
-        #plot_obs_course(np_img, 1 / dict_data['radius'], verbose=True)
-        plot_obs_turning(np_img, dict_data["rel_course"] / 100, verbose=True)
+        plot_obs_turning(np_img, 1 / dict_data['radius'], verbose=True)
+        #plot_obs_turning(np_img, dict_data["rel_course"] / 100, verbose=True)

@@ -15,7 +15,7 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
     # get experiments
-    exprs = os.listdir(args.sim_dir)
+    exprs = sorted(os.listdir(args.sim_dir))
 
     for expr in exprs:
         # get list of videos
