@@ -99,7 +99,7 @@ if __name__ == "__main__":
     model = RESNET(no_outputs=nbins).to(device)
 
     # load model
-    path = os.path.join("snapshots_scale", args.load_model, "ckpts", "default.pth")
+    path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
     load_ckpt(path, [('model', model)])
     model.eval()
 

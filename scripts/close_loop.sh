@@ -7,7 +7,7 @@
 BEGIN=0
 END=100
 MODEL=resnet
-LOAD_MODEL=00002
+LOAD_MODEL=00003
 SPLIT_PATH=data_split/test_scenes.txt
 DATA_PATH=/home/nemodrive/workspace/roberts/UPB_dataset/old_dataset
 SIM_DIR=simulation

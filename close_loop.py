@@ -33,6 +33,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument('--data_path', type=str, help='path to the directory of raw dataset (.mov & .json)')
     parser.add_argument('--sim_dir', type=str, help='simulation directory', default='simulation')
     parser.add_argument('--use_baseline', action='store_true', help='predict 0 degrees always')
+    parser.add_argument('--epoch_ckpt', type=int, default=0)
     args = parser.parse_args()
     return args
 
@@ -145,7 +146,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     """ Close loop evaluation of a video """
 
     scene = metadata.split('.')[0]
-    log_path = os.path.join(args.sim_dir, args.load_model, scene)
+    log_path = os.path.join(args.sim_dir + ("_%d" % (args.epoch_ckpt, )) , args.load_model, scene)
     if not os.path.exists(log_path):
         os.makedirs(log_path)
         os.makedirs(os.path.join(log_path, "imgs"))
@@ -198,7 +199,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
                 # construct full image
                 turning_distribution = torch.tensor(turning_distribution).unsqueeze(0)
-                imgs_path = os.path.join(args.sim_dir, args.load_model, scene, "imgs", str(idx).zfill(5) + ".png")
+                imgs_path = os.path.join(args.sim_dir + ("_%d" % (args.epoch_ckpt, )), args.load_model, scene, "imgs", str(idx).zfill(5) + ".png")
                 full_img = visualisation(process_frame(frame), turning_distribution, toutput,
                                          1, imgs_path).astype(np.uint8)
             else:
@@ -225,7 +226,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     absolute_mean_distance, absolute_mean_angle, plot_dist_ang = plot_statistics(statistics)
 
     # save stats plot
-    stats_path = os.path.join(args.sim_dir, args.load_model, scene, "stats.png")
+    stats_path = os.path.join(args.sim_dir + ("_%d" % (args.epoch_ckpt, )), args.load_model, scene, "stats.png")
     cv2.imwrite(stats_path, plot_dist_ang[..., ::-1])
 
     # save all data
@@ -240,7 +241,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         "statistics": statistics,
     }
 
-    data_path = os.path.join(args.sim_dir, args.load_model, scene, "data.pkl")
+    data_path = os.path.join(args.sim_dir + ("_%d" % (args.epoch_ckpt, )), args.load_model, scene, "data.pkl")
     with open(data_path, 'wb') as fout:
         pkl.dump(data, fout)
 
@@ -263,13 +264,13 @@ if __name__ == "__main__":
 
     # load model
     if not args.use_baseline:
-        path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
+        path = os.path.join("snapshots", args.load_model, "ckpts", "default_%d.pth" % args.epoch_ckpt)
         load_ckpt(path, [('model', model)])
         model.eval()
 
     # construct simulation dirs
-    if not os.path.exists(args.sim_dir):
-        os.mkdir(args.sim_dir)
+    if not os.path.exists(args.sim_dir + ("_%d" % (args.epoch_ckpt, ))):
+        os.mkdir(args.sim_dir + ("_%d" % (args.epoch_ckpt, )))
 
     # get list of test scenes
     with open(args.split_path, 'rt') as fin:
