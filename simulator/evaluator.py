@@ -33,6 +33,24 @@ class AugmentationEvaluator:
         # set transformation matrix
         self.T = np.eye(3)
 
+        # initialize trajectory buffers
+        self.trajectories = {
+            "real_trajectory": [],
+            "sim_trajectory": [],
+        }
+
+        # initailize intervention points buffers
+        self.interv_points = {
+            "northing": [],
+            "easting": [],
+        }
+        
+
+    def get_trajectories(self):
+        return self.trajectories
+
+    def get_intervention_points(self):
+        return self.interv_points
 
     @staticmethod
     def get_relative_course(prev_course, crt_course):
@@ -106,11 +124,36 @@ class AugmentationEvaluator:
         args = [next_frame, steer, speed, dt, pred_steer]
         next_sim_frame, interv = self.simulator.run(args)
 
+        # trajectory book keeping
+        real_position = np.array([
+               self.reader.easting - self.reader.init_easting,
+               self.reader.northing - self.reader.init_northing,
+        ])
+
+        # compute sim car relative position
+        relative_position = np.array([self.simulator.get_distance(), 0, 1])
+        R = AugmentationEvaluator.get_rotation_matrix(self.reader.course)
+        sim_position = real_position + np.dot(R, relative_position)[:-1]
+
+        # append coordinates to trajectory dictionary/buffers
+        self.trajectories["real_trajectory"].append(real_position)
+        self.trajectories["sim_trajectory"].append(sim_position)
+        
+
         # update packet
         self.packet = next_packet
 
-        # append intervention points
+        # if intervention happened
         if interv:
+            # append intervention point (relative to UPB map)
+            self.interv_points["easting"].append(
+                sim_position[0] + self.reader.init_easting
+            )
+            self.interv_points["northing"].append(
+                sim_position[1] + self.reader.init_northing
+            )
+
+            # return the ground truth info
             frame, speed, rel_course = self.packet
             R = steering.get_radius_from_course(rel_course, speed, dt)
             turning  = 1 / R

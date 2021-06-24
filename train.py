@@ -125,7 +125,7 @@ def compile(args: argparse.Namespace) -> Tuple:
         )
 
     # learning rate scheduler
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 1.0)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, 0.5)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=args.step_size, verbose=True)
     # scheduler = None
     return model, optimizer, criterion, scheduler

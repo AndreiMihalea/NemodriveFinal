@@ -21,7 +21,7 @@ if __name__ == "__main__":
     weights = weights["name"].to_numpy()
 
     # define scale range to test
-    lhs, rhs, points = 10, 50, 100
+    lhs, rhs, points = 10, 60, 100
     scales = np.linspace(lhs, rhs, points)
 
     # define error buffers
@@ -88,9 +88,9 @@ if __name__ == "__main__":
 
     # plot errors
     ax = sns.lineplot(x, y, hue=hue)
-    ax.set(xlabel="Scale factor", ylabel="Mean absoulte error")
-    plt.axvline(x=x_min, ymin=0, ymax=1, color='g', label='Minimizer', linestyle='--')
-    plt.axvline(x=x_min_unbiased, ymin=0, ymax=1, color='c', label="Unbiased minimizer", linestyle='--')
+    ax.set(xlabel="Scale factor", ylabel="Mean squared error")
+    plt.axvline(x=x_min, ymin=0, ymax=1, color='b', label='Minimizer', linestyle='--')
+    plt.axvline(x=x_min_unbiased, ymin=0, ymax=1, color='tab:orange', label="Unbiased minimizer", linestyle='--')
     plt.axvline(x=x_pred, ymin=0, ymax=1, color='r', label='Predicted minimizer', linestyle='--')
     plt.legend()
     plt.show()

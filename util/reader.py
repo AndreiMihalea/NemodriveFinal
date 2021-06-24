@@ -167,4 +167,7 @@ class JSONReader(Reader):
         self.northing = location['northing']
         self.easting = location['easting']
 
+        # update course
+        self.course = location["course"]
+        
         return frame[..., ::-1], speed, rel_course

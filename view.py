@@ -6,11 +6,14 @@ import pandas as pd
 import pickle as pkl
 import itertools
 from tqdm import tqdm 
+from util.road_map import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dst_dir", type=str, default="./results")
 parser.add_argument("--sim_dir", type=str, default="./simulation")
 parser.add_argument("--time_penalty", type=int, default=6)
+parser.add_argument("--map_name", type=str, default="./map/high_res_full_UPB_standard.png")
+parser.add_argument("--csv_name", type=str, default="./map/high_Res_full_UPB_standard.csv")
 args = parser.parse_args()
 
 if __name__ == "__main__":
@@ -22,6 +25,9 @@ if __name__ == "__main__":
         videos_path = os.path.join(args.sim_dir, expr)
         videos = os.listdir(videos_path)
 
+        # create plotter 
+        plot = UPB_Map(map_name=args.map_name, csv_name=args.csv_name)
+
         # create buffers
         num_intervs = []
         auto = []
@@ -29,6 +35,7 @@ if __name__ == "__main__":
         distances = []
         angles = []
         steps2interv = []
+        northing, easting = [], []
 
         for video in tqdm(videos):
             # read data for each video
@@ -47,11 +54,33 @@ if __name__ == "__main__":
             distances += list(itertools.chain.from_iterable(data['statistics']['distances']))
             angles += list(itertools.chain.from_iterable(data['statistics']['angles']))
             steps2interv += [len(x) for x in data['statistics']['distances']]
+            northing += data['intervention_coords']['northing']
+            easting += data['intervention_coords']['easting']
+
+        # convert to numpy array
+        northing = np.array(northing)
+        easting = np.array(easting)
+    
+        # plot intervention points
+        upb_map = plot.plot_points(
+            northing, easting,
+            img=plot.map,
+            radius=20,
+            color=(0, 0, 255),
+            verbose=False
+        )
 
         # defin path
         expr_path = os.path.join(args.dst_dir, expr)
         if not os.path.exists(expr_path):
             os.makedirs(expr_path)
+
+
+        # save image
+        img_path = os.path.join(expr_path, "interventions.png")
+        cv2.imwrite(img_path, upb_map)
+        print(img_path)
+
 
         # save individual results
         indiv_results = {

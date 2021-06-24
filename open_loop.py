@@ -120,7 +120,7 @@ if __name__ == "__main__":
     results = main(model, test_dataloader)
     print(results)
     
-    results_path = "./results_scale"
+    results_path = "./results"
     if not os.path.exists(results_path):
         os.mkdir(results_path)
         
