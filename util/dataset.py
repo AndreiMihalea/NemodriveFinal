@@ -126,7 +126,8 @@ class UPBDataset(Dataset):
         # process frame
         np_img = self.reader.crop_car(np_img)
         np_img = self.reader.crop_center(np_img)
-        np_img = self.reader.resize_img(np_img)
+        # np_img = self.reader.resize_img(np_img)
+        
         # transpose to [C, H, W] and normalize to [0, 1]
         np_img = np_img.transpose(2, 0, 1)
         np_img = normalize(np_img)

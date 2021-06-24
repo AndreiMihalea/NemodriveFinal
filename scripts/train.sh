@@ -34,38 +34,38 @@ export CUDA_VISIBLE_DEVICES=1
 # train model using 2D persepctive augmentation
 # this model is trained with the steering recorded from CAN
 # this model is trained with data balancing
-python train.py \
-	--batch_size $BATCH_SIZE \
-	--vis_int $VIS_INT \
-	--log_int $LOG_INT \
-	--dataset_dir $DATASET_DIR \
-	--step_size $STEP_SIZE \
-	--patience $PATIENCE \
-	--num_epochs $NUM_EPOCHS \
-	--optimizer $OPTIMIZER \
-	--weight_decay $WEIGHT_DECAY\
-	--lr $LR \
-	--seed $SEED \
-	--use_balance \
- 	--scale 1.0 \
+#python train.py \
+#	--batch_size $BATCH_SIZE \
+#	--vis_int $VIS_INT \
+#	--log_int $LOG_INT \
+#	--dataset_dir $DATASET_DIR \
+#	--step_size $STEP_SIZE \
+#	--patience $PATIENCE \
+#	--num_epochs $NUM_EPOCHS \
+#	--optimizer $OPTIMIZER \
+#	--weight_decay $WEIGHT_DECAY\
+#	--lr $LR \
+#	--seed $SEED \
+#	--use_balance \
+# 	--scale 1.0 \
 
 # # train model using 2D persepctive augmentation
 # # this model is trained with the steering recorded from CAN
 # # this model is trained with databalancing and perspective augmentations
-#python train.py \
-# 	--batch_size $BATCH_SIZE \
-# 	--vis_int $VIS_INT \
-# 	--log_int $LOG_INT \
-# 	--dataset_dir $DATASET_DIR \
-# 	--step_size $STEP_SIZE \
-# 	--patience $PATIENCE \
-# 	--num_epochs $NUM_EPOCHS \
-# 	--optimizer $OPTIMIZER \
-# 	--weight_decay $WEIGHT_DECAY\
-# 	--lr $LR \
-# 	--seed $SEED \
-# 	--use_augm \
-# 	--scale 1.0 \
+python train.py \
+ 	--batch_size $BATCH_SIZE \
+ 	--vis_int $VIS_INT \
+ 	--log_int $LOG_INT \
+ 	--dataset_dir $DATASET_DIR \
+ 	--step_size $STEP_SIZE \
+ 	--patience $PATIENCE \
+ 	--num_epochs $NUM_EPOCHS \
+ 	--optimizer $OPTIMIZER \
+ 	--weight_decay $WEIGHT_DECAY\
+ 	--lr $LR \
+ 	--seed $SEED \
+ 	--use_augm \
+ 	--scale 1.0 \
 
 
 ## train model using 2D persepctive augmentation

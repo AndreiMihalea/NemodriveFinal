@@ -5,7 +5,7 @@
 #####################################################################
 
 BEGIN=0
-END=100
+END=2
 MODEL=resnet
 LOAD_MODEL=00002
 SPLIT_PATH=data_split/test_scenes.txt

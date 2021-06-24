@@ -46,8 +46,6 @@ class RESNET(nn.Module):
             mean_rgb = torch.tensor([0.57, 0.44, 0.30]).view(1, 3, 1, 1).to(self.device)
             std_rgb  = torch.tensor([0.31, 0.30, 0.25]).view(1, 3, 1, 1).to(self.device)
 
-
-
         # make input unit normal
         img = data["img"]
         img = (img - mean_rgb) / std_rgb
@@ -58,7 +56,7 @@ class RESNET(nn.Module):
         # average pooling
         input = self.avgpool(input)
         input = input.reshape(input.shape[0], -1)
-        
+
         # append speed if necessary
         if self.use_speed:
             input = torch.cat([input, data["speed"]], dim=1)
