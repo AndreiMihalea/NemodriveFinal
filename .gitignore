@@ -4,3 +4,5 @@ results
 simulation
 snapshots
 
+*.pyc
+__pycache__/

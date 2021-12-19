@@ -1,8 +1,0 @@
-{
-    "model": "deeplabv3",
-    "backbone": "resnet50",
-    "dataset": "upb",
-    "demo_dir": "/mnt/storage/workspace/andreim/nemodrive/upb_data/dataset/test_frames/0d26551740c24c92/",
-    "threshold": -0.4,
-    "device": "cuda"
-}
