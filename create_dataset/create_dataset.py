@@ -42,7 +42,6 @@ def read_data(metadata: str, path_img: str, path_data: str,
     verbose
         verbose flag to display images while generating them
     """
-
     # define dataset reader
     reader = JSONReader(args.root_dir, metadata, frame_rate=frame_rate)
 
@@ -57,7 +56,6 @@ def read_data(metadata: str, path_img: str, path_data: str,
 
     # read the first frame from the video
     frame, speed, rel_course = reader.get_next_image()
-
     while True:
         try:
             # get next frame corresponding to current prediction
@@ -134,7 +132,7 @@ if __name__ == "__main__":
     # read the list of scenes
     files = os.listdir(args.root_dir)
     metadata = [file for file in files if file.endswith(".json")]
-
+    
     # process all scenes
     for md in tqdm(metadata):
         read_data(

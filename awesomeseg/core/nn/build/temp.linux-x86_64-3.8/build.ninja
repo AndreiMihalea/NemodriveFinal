@@ -1,0 +1,23 @@
+ninja_required_version = 1.3
+cxx = c++
+
+cflags = -pthread -B /home/nemodrive/anaconda3/envs/awesomeseg/compiler_compat -Wl,--sysroot=/ -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -Wstrict-prototypes -fPIC -I/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc -I/home/nemodrive/anaconda3/envs/awesomeseg/lib/python3.8/site-packages/torch/include -I/home/nemodrive/anaconda3/envs/awesomeseg/lib/python3.8/site-packages/torch/include/torch/csrc/api/include -I/home/nemodrive/anaconda3/envs/awesomeseg/lib/python3.8/site-packages/torch/include/TH -I/home/nemodrive/anaconda3/envs/awesomeseg/lib/python3.8/site-packages/torch/include/THC -I/home/nemodrive/anaconda3/envs/awesomeseg/include/python3.8 -c
+post_cflags = -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=_C -D_GLIBCXX_USE_CXX11_ABI=0 -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=_C -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14
+ldflags = 
+
+rule compile
+  command = $cxx -MMD -MF $out.d $cflags -c $in -o $out $post_cflags
+  depfile = $out.d
+  deps = gcc
+
+
+
+build /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/build/temp.linux-x86_64-3.8/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/vision.o: compile /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/vision.cpp
+build /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/build/temp.linux-x86_64-3.8/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/cpu/ca_cpu.o: compile /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/cpu/ca_cpu.cpp
+build /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/build/temp.linux-x86_64-3.8/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/cpu/psa_cpu.o: compile /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/cpu/psa_cpu.cpp
+build /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/build/temp.linux-x86_64-3.8/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/cpu/syncbn_cpu.o: compile /home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch/core/nn/csrc/cpu/syncbn_cpu.cpp
+
+
+
+
+

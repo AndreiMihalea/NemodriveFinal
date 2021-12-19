@@ -5,11 +5,11 @@
 #####################################################################
 
 BEGIN=0
-END=100
+END=2
 MODEL=resnet
 LOAD_MODEL=00002
 SPLIT_PATH=data_split/test_scenes.txt
-DATA_PATH=/home/nemodrive/workspace/roberts/UPB_dataset/old_dataset
+DATA_PATH=/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/old_dataset
 SIM_DIR=simulation
 
 python close_loop.py \
@@ -19,3 +19,6 @@ python close_loop.py \
 	--split_path $SPLIT_PATH \
 	--data_path $DATA_PATH \
 	--sim_dir $SIM_DIR \
+	--model deeplabv3 \
+	--backbone resnet50 \
+	--dataset upb

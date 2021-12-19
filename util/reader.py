@@ -79,7 +79,7 @@ class JSONReader(Reader):
         # get data from json
         with open(os.path.join(self.root_dir, self.file)) as f:
             self.data = json.load(f)
-
+        
         # get camera
         self.center_camera = self.data['cameras'][0]
 
@@ -171,3 +171,105 @@ class JSONReader(Reader):
         self.course = location["course"]
         
         return frame[..., ::-1], speed, rel_course
+
+class PKLReader(Reader):
+    def __init__(self, root_dir: str, pkl_file: str = None, frame_rate: int = 3):
+        super(PKLReader, self).__init__(root_dir, pkl_file, frame_rate)
+        self.root_dir = root_dir
+        self.pkl_file = pkl_file
+        self.frame_rate = frame_rate
+        self.frame_idx = -1
+        self.generator = self._create_generator()
+
+    def _create_generator(self):
+        dt = int(1.0 / self.frame_rate * 1000)
+        player = nemodata.VariableSampleRatePlayer(self.root_dir, min_packet_delay_ms=dt)
+        player.start()
+        return player.stream_generator()
+
+    @property
+    def K(self):
+        """ Returns intrinsic camera matrix """
+        return np.array([
+            [0.95, 0,  0.5],  # width
+            [0, 1.27, 0.55],  # height
+            [0,  0, 1]])
+
+    @property
+    def M(self):
+        """ Returns extrinsic camera matrix """
+        return np.array([
+            [1, 0, 0, 0.00],
+            [0, 1, 0, 1.65],
+            [0, 0, 1, 1.54],
+            [0, 0, 0, 1]
+        ])
+
+    @staticmethod
+    def crop_car(img: np.array):
+        return img[:380, ...]
+
+    @staticmethod
+    def crop_center(img: np.array):
+        return Crop.crop_center(img, up=0.0, left=0.25, right=0.25)
+
+    @staticmethod
+    def resize_img(img: np.array):
+        return cv2.resize(img, dsize=None, fx=0.8, fy=0.8)
+
+    @property
+    def video_length(self):
+        return (self.frame_idx + 1) / self.frame_rate
+
+    def get_package(self):
+        try:
+            packet = next(self.generator)
+            self.frame_idx += 1
+        except Exception as e:
+            return np.array([]), None, None
+
+        # get image
+        center_img = packet["images"]["center"]
+        center_img = cv2.resize(center_img, None, fx=0.3, fy=0.3)
+
+        # get speed value km/h
+        speed = packet["sensor_data"]["canbus"]["speed"]["value"]
+        steer = packet["sensor_data"]["canbus"]["steer"]["value"]
+        return center_img, speed, steer
+
+
+    def get_next_image(self):
+        packet = self.get_package()
+        if len(packet[0]) == 0:
+            return packet
+
+        img, speed, steer = packet
+
+        # remove offset
+        OFFSET = -737.6
+        steer = None if steer == 0 else steer - OFFSET
+
+        # trasform from km/h to m/s
+        speed = Convertor.kmperh2mpers(speed)
+
+        # transform steering to course
+        rel_course = None
+
+        if steer:
+            dt = 1.0 / self.frame_rate
+            rel_course = Reader.get_course(steer, speed, dt)
+            rel_course = -rel_course # convention 
+
+        # plotter
+        #dist = gaussian_dist(200 + 10 * rel_course)
+        #fig = plt.figure()
+        #plt.plot(dist)
+        #course_img = np.asarray(fig2img(fig, img.shape[1], img.shape[0]))
+        #plt.close(fig)
+        #full_img = np.concatenate([img, course_img], axis=1)
+        #print("speed", speed, "rel_course", rel_course)
+        #print("============")
+        #cv2.imshow("FULL", full_img)
+        #cv2.waitKey(0)
+
+        return img, speed, rel_course

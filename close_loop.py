@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 import torch.nn
 import torch.nn.functional as F
+from torchvision import transforms
 
 from util.reader import JSONReader
 from simulator.evaluator import AugmentationEvaluator
@@ -21,6 +22,25 @@ import util.vis as vis
 from util.vis import gaussian_dist, normalize, unnormalize
 from typing import Tuple
 
+from util.car_utils import get_radius, WHEEL_STEER_RATIO, render_path
+from util.segmentation_utils import compute_score, compute_miou
+
+import sys
+
+sys.path.insert(1, '/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch')
+
+from core.data.dataloader import get_segmentation_dataset
+from core.models.model_zoo import get_segmentation_model
+from core.utils.score import SegmentationMetric
+from core.utils.visualize import get_color_pallete
+from core.utils.logger import setup_logger
+from core.utils.distributed import synchronize, get_rank, make_data_sampler, make_batch_data_sampler
+
+
+segmentation_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
+])
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -33,8 +53,38 @@ def get_args() -> argparse.Namespace:
     parser.add_argument('--data_path', type=str, help='path to the directory of raw dataset (.mov & .json)')
     parser.add_argument('--sim_dir', type=str, help='simulation directory', default='simulation')
     parser.add_argument('--use_baseline', action='store_true', help='predict 0 degrees always')
+    # segmentation arguments
+    parser.add_argument('--model', type=str, default='fcn',
+                        choices=['fcn32s', 'fcn16s', 'fcn8s',
+                                 'fcn', 'psp', 'deeplabv3', 'deeplabv3_plus',
+                                 'danet', 'denseaspp', 'bisenet',
+                                 'encnet', 'dunet', 'icnet',
+                                 'enet', 'ocnet', 'ccnet', 'psanet',
+                                 'cgnet', 'espnet', 'lednet', 'dfanet'],
+                        help='model name (default: fcn32s)')
+    parser.add_argument('--backbone', type=str, default='resnet50',
+                        choices=['vgg16', 'resnet18', 'resnet50',
+                                 'resnet101', 'resnet152', 'densenet121',
+                                 'densenet161', 'densenet169', 'densenet201'],
+                        help='backbone name (default: vgg16)')
+    parser.add_argument('--dataset', type=str, default='pascal_voc',
+                        choices=['pascal_voc', 'pascal_aug', 'ade20k',
+                                 'citys', 'sbu', 'upb', 'kitti'],
+                        help='dataset name (default: pascal_voc)')
+    parser.add_argument('--aux', action='store_true', default=False,
+                        help='Auxiliary loss')
+    parser.add_argument('--local_rank', type=int, default=0)
     args = parser.parse_args()
     return args
+
+
+def get_segmentation_network():
+    BatchNorm2d = nn.BatchNorm2d
+    model = get_segmentation_model(model=args.model, dataset=args.dataset, backbone=args.backbone,
+                                   aux=args.aux, pretrained=True, pretrained_base=False,
+                                   local_rank=args.local_rank,
+                                   norm_layer=BatchNorm2d).to(device)
+    return model
 
 
 def set_seed(seed: int = 0):
@@ -142,6 +192,9 @@ def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tenso
 def test_video(root_dir: str, metadata: str, time_penalty=6,
                translation_threshold=1.5, rotation_threshold=0.2, verbose=True):
 
+    segmentation_model = get_segmentation_network()
+    segmentation_model.eval()
+
     """ Close loop evaluation of a video """
 
     scene = metadata.split('.')[0]
@@ -167,11 +220,22 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         reader=reader,
         time_penalty=time_penalty,
         translation_threshold=translation_threshold,
+        rotation_threshold=rotation_threshold,
+        process_input=True
+    )
+    augm_segmentation = AugmentationEvaluator(
+        reader=reader,
+        time_penalty=time_penalty,
+        translation_threshold=translation_threshold,
         rotation_threshold=rotation_threshold
     )
 
     # get first two frames of the video and make a prediction
     frame, speed, turning, interv = augm.reset()
+    frame_segm, _, _, _ = augm_segmentation.reset()
+
+    # cv2.imshow('frame', frame)
+    # cv2.waitKey(0)
 
     with torch.no_grad():
         for idx in itertools.count():
@@ -182,6 +246,47 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             # make prediction
             pred_turning, toutput = make_prediction(frame, speed)
             next_frame, next_speed, next_turning, interv = augm.step(pred_turning)
+            next_frame_segm, _, _, _ = augm_segmentation.step(pred_turning)
+
+            pred_steer = augm.get_pred_steer(pred_turning)
+            # print(pred_steer, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
+            radius = get_radius(pred_steer / WHEEL_STEER_RATIO)
+
+            image_res, overlay = render_path(frame_segm, radius)
+            overlay = overlay[:, :, 1] / overlay.max()
+
+            # cv2.imshow('predicted', overlay)
+            # cv2.waitKey(0)
+
+            image = frame_segm.copy()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = segmentation_transform(image).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                outputs = segmentation_model(image)
+
+            logits = nn.Sigmoid()(outputs[0][0][0]).cpu().data.numpy()
+            logits_og = logits.copy()
+
+            logits[logits > 0.35] = 1
+            logits[logits != 1] = 0
+
+            mask_overlay = np.array(logits)
+            mask_overlay = np.array([mask_overlay] * 3)
+            mask_overlay[mask_overlay != 0] = 255
+            mask_overlay[mask_overlay != 255] = 0
+            mask_overlay = mask_overlay[1] / mask_overlay[1].max()
+
+            # img = cv2.resize(img, (832, 256))[:, 96:-96, :]
+            # print(img.shape, mask_overlay.shape)
+            # res_img = cv2.addWeighted(mask_overlay.transpose((1, 2, 0)).astype(np.float32), 1., frame_segm.astype(np.float32), 1, 0)
+            # cv2.imshow('res', res_img / 255.0)
+            # cv2.waitKey(0)
+
+            print(logits_og.shape, mask_overlay.shape, overlay.shape, mask_overlay.max())
+
+            miou = compute_miou(overlay, mask_overlay)
+            soft_score = compute_score(overlay, logits_og)
             
             if not interv:
                 # distribution for the ground truth course
@@ -217,6 +322,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
             # update frame
             frame = next_frame
+            frame_segm = next_frame_segm
             turning = next_turning
             speed = next_speed
 

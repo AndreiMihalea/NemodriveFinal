@@ -8,7 +8,8 @@ from util.reader import Reader, JSONReader
 
 
 class AugmentationEvaluator:
-    def __init__(self, reader: Reader, translation_threshold=1.5, rotation_threshold=0.2, time_penalty=6, frame_rate=3):
+    def __init__(self, reader: Reader, translation_threshold=1.5, rotation_threshold=0.2, time_penalty=6, frame_rate=3,
+                 process_input=False):
         """
         :param json: path to json file
         :param translation_threshold: translation threshold on OX axis
@@ -20,6 +21,7 @@ class AugmentationEvaluator:
         self.rotation_threshold = rotation_threshold
         self.time_penalty = time_penalty
         self.frame_rate = frame_rate
+        self.process_input = process_input
         self.frame_idx = 0
 
         # initialize simulator
@@ -44,6 +46,11 @@ class AugmentationEvaluator:
             "northing": [],
             "easting": [],
         }
+
+        # initailize confidence buffers
+        self.confidence_points = {
+            "confidence": [],
+        }
         
 
     def get_trajectories(self):
@@ -51,6 +58,14 @@ class AugmentationEvaluator:
 
     def get_intervention_points(self):
         return self.interv_points
+
+    @staticmethod
+    def get_pred_steer(pred_turning):
+        sgn = 1 if pred_turning >= 0 else -1
+        pred_R = sgn / (abs(pred_turning) + 1e-5)
+        pred_delta, _, _ = steering.get_delta_from_radius(pred_R)
+        pred_steer = steering.get_steer_from_delta(pred_delta)
+        return pred_steer
 
     @staticmethod
     def get_relative_course(prev_course, crt_course):
@@ -92,9 +107,10 @@ class AugmentationEvaluator:
         return frame, speed, turning, False
 
     def process_frame(self, frame):
-        frame = self.reader.crop_car(frame)
-        frame = self.reader.crop_center(frame)
-        frame = self.reader.resize_img(frame)
+        if self.process_input:
+            frame = self.reader.crop_car(frame)
+            frame = self.reader.crop_center(frame)
+            frame = self.reader.resize_img(frame)
         return frame
 
     def step(self, pred_turning=0.):
