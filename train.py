@@ -56,6 +56,10 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--weight_decay", type=float, default=0, help="weight decay optimizer")
     parser.add_argument("--seed", type=int, default=0, help="seed")
     parser.add_argument("--scale", type=float, default=1.0, help="scaling factor for the radius")
+    # segmentation roi arguments
+    parser.add_argument("--use_roi", choices=['input', 'features'], help="use path region of interest as input")
+    parser.add_argument("--roi_map", choices=['seg_hard', 'seg_soft', 'gt_hard', 'gt_soft'], default='seg_soft',
+                        help="use path region of interest as input")
     args = parser.parse_args()
     return args
 
@@ -96,7 +100,7 @@ def compile(args: argparse.Namespace) -> Tuple:
 
     # define model
     nbins=401
-    model = RESNET(no_outputs=nbins).to(device)
+    model = RESNET(no_outputs=nbins, use_roi=args.use_roi).to(device)
     # model = Simple(no_outputs=nbins).to(device)
     # model= PilotNet(no_outputs=nbins).to(device)
 
@@ -134,9 +138,13 @@ def compile(args: argparse.Namespace) -> Tuple:
 def get_dataset(args: argparse.Namespace) -> Tuple[Tuple, Tuple]:
     # define data loaders
     dataset_dir = os.path.join(args.dataset_dir, "pose_dataset" if args.use_pose else "gt_dataset")
-    train_dataset = UPBDataset(dataset_dir, train=True, augm=args.use_augm, scale=args.scale)
-    test_dataset = UPBDataset(dataset_dir, train=False, scale=args.scale)
-    synth_test_dataset = UPBDataset(dataset_dir, train=False, synth=args.use_synth, scale=args.scale)
+    if args.use_roi:
+        roi_map = args.roi_map
+    else:
+        roi_map = None
+    train_dataset = UPBDataset(dataset_dir, train=True, augm=args.use_augm, scale=args.scale, roi=roi_map)
+    test_dataset = UPBDataset(dataset_dir, train=False, scale=args.scale, roi=roi_map)
+    synth_test_dataset = UPBDataset(dataset_dir, train=False, synth=args.use_synth, scale=args.scale, roi=roi_map)
 
     # balanced training dataset
     if args.use_balance:
@@ -297,7 +305,11 @@ if __name__ == "__main__":
         os.mkdir(args.vis_dir)
 
     # define experiment name
-    experiment = str(len(os.listdir(args.vis_dir))).zfill(5)
+    if args.use_roi:
+        experiment = os.path.join('{}_{}'.format(args.use_roi, args.roi_map),
+                                  str(len(os.listdir(args.vis_dir))).zfill(5))
+    else:
+        experiment = str(len(os.listdir(args.vis_dir))).zfill(5)
 
     if not os.path.exists(os.path.join(args.vis_dir, experiment)):
         os.makedirs(os.path.join(args.vis_dir, experiment))

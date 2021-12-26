@@ -27,6 +27,10 @@ class UPBDataset(Dataset):
 
         self.imgs = [os.path.join(root_dir, "img_real", file + ".png") for file in files]
         self.data = [os.path.join(root_dir, "data_real", file + ".pkl") for file in files]
+        self.seg_labels_hard = [os.path.join(root_dir, "hard_seg_labels", file + ".pt") for file in files]
+        self.seg_labels_soft = [os.path.join(root_dir, "soft_seg_labels", file + ".pts") for file in files]
+        self.gt_labels_hard = [os.path.join(root_dir, "pose_hard_labels", file + ".npy") for file in files]
+        self.gt_labels_soft = [os.path.join(root_dir, "pose_soft_labels", file + ".npy") for file in files]
 
         # We need to specify augmentations differently in newer versions of torchvision.
         # We first try the newer tuple version; if this fails we fall back to scalars

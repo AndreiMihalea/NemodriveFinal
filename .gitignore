@@ -1,8 +1,10 @@
 dataset
 logs
+logs_pose
 results
 simulation
 snapshots
+snapshots_pose
 
 *.pyc
 __pycache__/

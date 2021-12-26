@@ -18,15 +18,30 @@ from util.vis import gaussian_dist, normalize
 
 class UPBDataset(Dataset):
     def __init__(self, root_dir: str, train: bool = True, augm: bool = False, 
-            synth: bool = False, scale: float = 1.0):
+            synth: bool = False, scale: float = 1.0, roi: str = 'seg_soft'):
         path = os.path.join(root_dir, "train_real.csv" if train else "test_real.csv")
         files = list(pd.read_csv(path)["name"])
         self.train = train
         self.augm = augm
         self.scale = scale
+        self.roi = roi
 
         self.imgs = [os.path.join(root_dir, "img_real", file + ".png") for file in files]
         self.data = [os.path.join(root_dir, "data_real", file + ".pkl") for file in files]
+        self.seg_labels_hard = [os.path.join(root_dir, "hard_seg_labels", file + ".pt") for file in files]
+        self.seg_labels_soft = [os.path.join(root_dir, "soft_seg_labels", file + ".pts") for file in files]
+        self.gt_labels_hard = [os.path.join(root_dir, "pose_hard_labels", file + ".npy") for file in files]
+        self.gt_labels_soft = [os.path.join(root_dir, "pose_soft_labels", file + ".npy") for file in files]
+
+        if self.roi == 'seg_hard':
+            self.roi_data = self.seg_labels_hard
+        elif self.roi == 'seg_soft':
+            self.roi_data = self.seg_labels_soft
+        elif self.roi == 'gt_hard':
+            self.roi_data = self.gt_labels_hard
+        elif self.roi == 'gt_soft':
+            self.roi_data = self.gt_labels_soft
+
 
         # We need to specify augmentations differently in newer versions of torchvision.
         # We first try the newer tuple version; if this fails we fall back to scalars
@@ -86,6 +101,11 @@ class UPBDataset(Dataset):
         
         # read the image
         img = pil.open(self.imgs[idx])
+
+        # read the roi
+        if self.roi:
+            roi_map_path = self.roi_data[idx]
+            roi_map = None
         
         # read ground truth turning radius
         with open(self.data[idx], "rb") as fin:
@@ -107,10 +127,11 @@ class UPBDataset(Dataset):
         else:
             # color augmentation object
             if do_aug and self.train:
-                color_aug = transforms.ColorJitter.get_params(
-                    self.brightness, self.contrast, self.saturation, self.hue)
+                color_aug = transforms.ColorJitter(self.brightness, self.contrast, self.saturation, self.hue)
             else:
                 color_aug = (lambda x: x)
+
+            print(color_aug, 'aaa')
 
             # read image & perform color augmentation
             img = color_aug(img)

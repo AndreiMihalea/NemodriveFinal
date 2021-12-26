@@ -10,6 +10,8 @@ WEIGHT_DECAY=0.001
 OPTIMIZER=sgd
 SCALE=32.8
 SEED=0
+ROI=input
+ROI_MAP=seg_soft
 
 VIS_INT=100
 LOG_INT=25
@@ -41,7 +43,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 
 
-# train model using 2D perspectiv agumentation and data balancing
+# train model using data balancing
 # this model is trained with the steering obtained from pose estimation
 python train.py \
 	--batch_size $BATCH_SIZE \
@@ -60,10 +62,12 @@ python train.py \
 	--vis_dir $VIS_DIR \
 	--log_dir $LOG_DIR \
 	--use_pose \
+	--use_roi $ROI \
+	--roi_map $ROI_MAP \
 
 
 
-# train model using 2D perspectiv agumentation and data balancing
+# train model using 2D perspective augmentation
 # this model is trained with the steering obtained from pose estimation
 python train.py \
 	--batch_size $BATCH_SIZE \
@@ -82,9 +86,11 @@ python train.py \
 	--vis_dir $VIS_DIR \
 	--log_dir $LOG_DIR \
 	--use_pose \
+	--use_roi $ROI \
+	--roi_map $ROI_MAP \
 
 
-# train model using 2D perspectiv agumentation and data balancing
+# train model using 2D perspective augmentation and data balancing
 # this model is trained with the steering obtained from pose estimation
 python train.py \
 	--batch_size $BATCH_SIZE \
@@ -104,5 +110,6 @@ python train.py \
 	--vis_dir $VIS_DIR \
 	--log_dir $LOG_DIR \
 	--use_pose \
-
+	--use_roi $ROI \
+	--roi_map $ROI_MAP \
 
