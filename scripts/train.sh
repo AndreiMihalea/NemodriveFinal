@@ -51,7 +51,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 # # train model using 2D persepctive augmentation
 # # this model is trained with the steering recorded from CAN
-# # this model is trained with databalancing and perspective augmentations
+# # this model is trained with data balancing and perspective augmentations
 python train.py \
  	--batch_size $BATCH_SIZE \
  	--vis_int $VIS_INT \

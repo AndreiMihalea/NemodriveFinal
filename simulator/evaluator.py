@@ -59,6 +59,9 @@ class AugmentationEvaluator:
     def get_intervention_points(self):
         return self.interv_points
 
+    def get_confidence(self):
+        return self.confidence_points
+
     @staticmethod
     def get_pred_steer(pred_turning):
         sgn = 1 if pred_turning >= 0 else -1
@@ -95,6 +98,8 @@ class AugmentationEvaluator:
         return self.simulator.get_statistics()
 
     def reset(self):
+        self.camera_position = [0, 1.657, 1.542276316]
+
         self.packet = self.reader.get_next_image()
         frame, speed, rel_course = self.packet
         

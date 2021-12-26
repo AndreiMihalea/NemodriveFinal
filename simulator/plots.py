@@ -1,11 +1,13 @@
+import matplotlib
 import matplotlib.pyplot as plt
-import seaborn as sns;
+import seaborn as sns
+matplotlib.use('TkAgg')
 
 sns.set()
 from util.vis import *
 
-HEIGHT = 256
-WIDTH = 512
+HEIGHT = 720
+WIDTH = 1080
 
 
 def plot_statistics(statistics):
@@ -64,7 +66,7 @@ def plot_statistics(statistics):
     return absolute_mean_distance, absolute_mean_angle, plot
 
 
-def plot_trajectories(trajectories):
+def plot_trajectories(trajectories, confidence):
     """
     Plot trajectories of the simulated and real car
     :param trajectories: dict {
@@ -74,14 +76,18 @@ def plot_trajectories(trajectories):
     :return: None
     """
     real_trajectory = np.array(trajectories['real_trajectory'])
-    simulated_trajectory = np.array(trajectories['simulated_trajectory'])
+    simulated_trajectory = np.array(trajectories['sim_trajectory'])
 
-    figure = plt.figure()
+    confidence_points = np.array(confidence['confidence'])
+    confidence_points = confidence_points / confidence_points.max()
+
+    figure = plt.figure(figsize=(16, 9), dpi=160)
     plt.scatter(real_trajectory[:, 0], real_trajectory[:, 1],
-                c="blue", label="Real car trajectory", s=5)
+                c="blue", label="Real car trajectory", s=60)
     plt.scatter(simulated_trajectory[:, 0], simulated_trajectory[:, 1],
-                c="red", label="Simulated car trajectory", s=5)
+                c=confidence_points, label="Simulated car trajectory", s=60, cmap='gray')
     plt.legend(loc=2)
+    plt.colorbar()
     plot = np.asarray(fig2img(figure, height=HEIGHT, width=WIDTH))
     plt.close(figure)
     return plot

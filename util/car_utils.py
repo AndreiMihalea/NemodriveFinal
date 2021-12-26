@@ -68,8 +68,8 @@ def get_car_path(r, distance=1., no_points=100, center_x=True, car_t=CAR_T):
     :return: center_points, inner_points, outer_points (on car path)
     """
     r_center = r
-    r_inner = r_center - car_t / 2.
-    r_outer = r_center + car_t / 2.
+    r_inner = r_center - car_t / 1.
+    r_outer = r_center + car_t / 1.
 
     d_inner = r_inner / r_center * distance
     d_outer = r_outer / r_center * distance
@@ -790,9 +790,7 @@ if __name__ == "__main__":
             idx += 1
 
 
-def add_3rd_dim(points):
-    camera_position = [0, 1.657, 1.542276316]
-
+def add_3rd_dim(points, camera_position):
     points3d = []
     for point in points:
         points3d.append([
@@ -809,8 +807,8 @@ def project_points_on_image_space(points_3d):
     camera_matrix = np.array([[1173.122620, 0.000000, 969.335924],
                   [0.000000, 1179.612539, 549.524382],
                   [0., 0., 1.]])
-    camera_matrix[0, :] /= 3.0
-    camera_matrix[1, :] /= 3.0
+    camera_matrix[0, :] /= 3
+    camera_matrix[1, :] /= 3
     distortion = np.array([0.053314, -0.117603, -0.004064, -0.001819, 0.000000])
 
     points = np.array(points_3d).astype(np.float32)
@@ -871,11 +869,11 @@ def filter_points(image, points,
     return points
 
 
-def render_path(image, radius):
+def render_path(image, radius, camera_position):
     curve_length = 30
     c, lw, rw = get_car_path(radius, distance=curve_length)
-    lw = add_3rd_dim(lw)
-    rw = add_3rd_dim(rw)
+    lw = add_3rd_dim(lw, camera_position)
+    rw = add_3rd_dim(rw, camera_position)
 
     lw = filter_points(image, lw)
     rw = filter_points(image, rw)

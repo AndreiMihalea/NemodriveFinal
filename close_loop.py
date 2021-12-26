@@ -212,6 +212,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
     # initialize reader
     reader = JSONReader(root_dir=root_dir, json_file=metadata, frame_rate=3)
+    reader_segmentation = JSONReader(root_dir=root_dir, json_file=metadata, frame_rate=3)
 
     # initialize evaluators
     # check multiple parameters like time_penalty, distance threshold and angle threshold
@@ -224,7 +225,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         process_input=True
     )
     augm_segmentation = AugmentationEvaluator(
-        reader=reader,
+        reader=reader_segmentation,
         time_penalty=time_penalty,
         translation_threshold=translation_threshold,
         rotation_threshold=rotation_threshold
@@ -248,14 +249,14 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             next_frame, next_speed, next_turning, interv = augm.step(pred_turning)
             next_frame_segm, _, _, _ = augm_segmentation.step(pred_turning)
 
-            pred_steer = augm.get_pred_steer(pred_turning)
+            pred_steer = -augm.get_pred_steer(pred_turning)
             # print(pred_steer, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
             radius = get_radius(pred_steer / WHEEL_STEER_RATIO)
 
-            image_res, overlay = render_path(frame_segm, radius)
-            overlay = overlay[:, :, 1] / overlay.max()
+            image_res, overlay = render_path(frame_segm, radius, augm.camera_position)
+            overlay_ackermann = overlay[:, :, 1] / overlay.max()
 
-            # cv2.imshow('predicted', overlay)
+            # cv2.imshow('predicted', image_res)
             # cv2.waitKey(0)
 
             image = frame_segm.copy()
@@ -275,7 +276,11 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             mask_overlay = np.array([mask_overlay] * 3)
             mask_overlay[mask_overlay != 0] = 255
             mask_overlay[mask_overlay != 255] = 0
-            mask_overlay = mask_overlay[1] / mask_overlay[1].max()
+
+            # heatmapshow = cv2.normalize(logits_og, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            # heatmapshow = cv2.applyColorMap(heatmapshow, cv2.COLORMAP_JET)
+            # cv2.imshow("final", np.concatenate((image_res, heatmapshow)))
+            # cv2.waitKey(0)
 
             # img = cv2.resize(img, (832, 256))[:, 96:-96, :]
             # print(img.shape, mask_overlay.shape)
@@ -283,10 +288,11 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             # cv2.imshow('res', res_img / 255.0)
             # cv2.waitKey(0)
 
-            print(logits_og.shape, mask_overlay.shape, overlay.shape, mask_overlay.max())
+            # miou = compute_miou(overlay_ackermann, mask_overlay)
+            soft_score = compute_score(overlay_ackermann, logits_og)
 
-            miou = compute_miou(overlay, mask_overlay)
-            soft_score = compute_score(overlay, logits_og)
+            if next_speed is not None:
+                augm.confidence_points['confidence'].append(soft_score)
             
             if not interv:
                 # distribution for the ground truth course
@@ -333,6 +339,11 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     # save stats plot
     stats_path = os.path.join(args.sim_dir, args.load_model, scene, "stats.png")
     cv2.imwrite(stats_path, plot_dist_ang[..., ::-1])
+
+    # trajecories plot
+    trajectories_path = os.path.join(args.sim_dir, args.load_model, scene, "trajectories.png")
+    trajectories_plot = plot_trajectories(augm.get_trajectories(), augm.get_confidence())
+    cv2.imwrite(trajectories_path, trajectories_plot)
 
     # save all data
     data = {
