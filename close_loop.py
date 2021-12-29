@@ -19,7 +19,7 @@ from simulator.evaluator import AugmentationEvaluator
 from simulator.plots import *
 
 import util.vis as vis
-from util.vis import gaussian_dist, normalize, unnormalize
+from util.vis import gaussian_dist, normalize, unnormalize, normalize_roi
 from typing import Tuple
 
 from util.car_utils import get_radius, WHEEL_STEER_RATIO, render_path
@@ -73,6 +73,9 @@ def get_args() -> argparse.Namespace:
                         help='dataset name (default: pascal_voc)')
     parser.add_argument('--aux', action='store_true', default=False,
                         help='Auxiliary loss')
+    parser.add_argument("--use_roi", choices=['input', 'features'], help="use path region of interest as input")
+    parser.add_argument("--roi_map", choices=['seg_hard', 'seg_soft', 'gt_hard', 'gt_soft'], default='seg_soft',
+                        help="use path region of interest as input")
     parser.add_argument('--local_rank', type=int, default=0)
     args = parser.parse_args()
     return args
@@ -146,7 +149,7 @@ def get_turning(output, smooth=True) -> Tuple[float, np.ndarray]:
     return (index - 200) / 1000, output
 
 
-def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tensor]:
+def make_prediction(frame: np.ndarray, roi_map: np.ndarray, speed: float) -> Tuple[float, torch.tensor]:
     """
     Make prediction given the current observation
 
@@ -165,6 +168,7 @@ def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tenso
     # preprocess data
     frame = process_frame(frame)
     speed = torch.tensor([[speed]]).to(device)
+    roi_map = torch.tensor(roi_map).unsqueeze(0).unsqueeze(0)
 
     # make first prediction
     with torch.no_grad():
@@ -172,6 +176,7 @@ def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tenso
         data = {
             "img": frame.to(device),
             "speed": speed.to(device),
+            "roi": roi_map.to(device)
         }
 
         # make prediction based on frame
@@ -243,9 +248,20 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
             # video is done
             if frame.size == 0:
                 break
+
+            # segmentation of the current frame
+            current_frame_segm = frame_segm.copy()
+            current_frame_segm = cv2.cvtColor(current_frame_segm, cv2.COLOR_BGR2RGB)
+            current_frame_segm = segmentation_transform(current_frame_segm).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                roi_map = segmentation_model(current_frame_segm)[0][0][0].cpu().numpy()
+
+            roi_map = augm_segmentation.force_process_frame(roi_map)
+            roi_map = normalize_roi(roi_map)
             
             # make prediction
-            pred_turning, toutput = make_prediction(frame, speed)
+            pred_turning, toutput = make_prediction(frame, roi_map, speed)
             next_frame, next_speed, next_turning, interv = augm.step(pred_turning)
             next_frame_segm, _, _, _ = augm_segmentation.step(pred_turning)
 
@@ -375,13 +391,15 @@ if __name__ == "__main__":
 
     # define model
     nbins = 401
-    model = RESNET(no_outputs=nbins).to(device)
+    model = RESNET(no_outputs=nbins, use_roi=args.use_roi).to(device)
     # model = PilotNet(no_outputs=nbins).to(device)
     model = model.to(device)
 
     # load model
     if not args.use_baseline:
-        path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
+        path = os.path.join("snapshots_pose", '{}_{}'.format(args.use_roi, args.roi_map),
+                            args.load_model, "ckpts", "default.pth")
+        print(path)
         load_ckpt(path, [('model', model)])
         model.eval()
 

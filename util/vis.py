@@ -11,15 +11,13 @@ def fig2data(fig):
     @param fig a matplotlib figure
     @return a numpy 3D array of RGBA values
     """
-    import matplotlib
-    matplotlib.use('Agg')
 
     # draw the renderer
     fig.canvas.draw()
  
     # Get the RGBA buffer from the figure
     w,h = fig.canvas.get_width_height()
-    buf = np.fromstring (fig.canvas.tostring_rgb(), dtype=np.uint8)
+    buf = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8)
     buf.shape = (w, h, 3) 
     return buf
  
@@ -29,8 +27,6 @@ def fig2img(fig, width, height):
     @param fig a matplotlib figure
     @return a Python Imaging Library ( PIL ) image
     """
-    import matplotlib
-    matplotlib.use('Agg')
 
     # put the figure pixmap into a numpy array
     buf = fig2data(fig)
@@ -100,6 +96,10 @@ def gaussian_dist(mean=200., std=10, nbins=401):
 
 def normalize(img):
     return img / 255.
+
+
+def normalize_roi(roi_map):
+    return (roi_map - np.min(roi_map)) / (np.ptp(roi_map) + 1e-5)
 
 
 def unnormalize(img):

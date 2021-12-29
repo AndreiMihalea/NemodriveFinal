@@ -8,3 +8,6 @@ snapshots_pose
 
 *.pyc
 __pycache__/
+
+simulation_scale/
+

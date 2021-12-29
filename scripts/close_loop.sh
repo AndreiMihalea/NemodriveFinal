@@ -7,10 +7,12 @@
 BEGIN=0
 END=81
 MODEL=resnet
-LOAD_MODEL=00002
+LOAD_MODEL=00001
 SPLIT_PATH=data_split/test_scenes.txt
 DATA_PATH=/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/old_dataset
-SIM_DIR=simulation
+SIM_DIR=simulation_scale
+ROI=features
+ROI_MAP=seg_soft
 
 python close_loop.py \
 	--begin $BEGIN \
@@ -21,4 +23,6 @@ python close_loop.py \
 	--sim_dir $SIM_DIR \
 	--model deeplabv3 \
 	--backbone resnet50 \
-	--dataset upb
+	--dataset upb \
+	--use_roi $ROI \
+	--roi_map $ROI_MAP \

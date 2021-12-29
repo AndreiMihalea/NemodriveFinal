@@ -21,5 +21,5 @@ for i in $(seq 7 7); do
 		--split_path $SPLIT_PATH \
 		--data_path $DATA_PATH \
 		--sim_dir $SIM_DIR \
-	        --epoch_ckpt $EPOCH_CKPT	
+    --epoch_ckpt $EPOCH_CKPT
 done

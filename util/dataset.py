@@ -13,7 +13,7 @@ import seaborn as sns; sns.set()
 from .reader import JSONReader
 from .augment import PerspectiveAugmentator
 from simulator.transformation import Crop
-from util.vis import gaussian_dist, normalize
+from util.vis import gaussian_dist, normalize, normalize_roi
 
 
 class UPBDataset(Dataset):
@@ -28,8 +28,8 @@ class UPBDataset(Dataset):
 
         self.imgs = [os.path.join(root_dir, "img_real", file + ".png") for file in files]
         self.data = [os.path.join(root_dir, "data_real", file + ".pkl") for file in files]
-        self.seg_labels_hard = [os.path.join(root_dir, "hard_seg_labels", file + ".pt") for file in files]
-        self.seg_labels_soft = [os.path.join(root_dir, "soft_seg_labels", file + ".pts") for file in files]
+        self.seg_labels_hard = [os.path.join(root_dir, "hard_seg_labels", file + ".npy") for file in files]
+        self.seg_labels_soft = [os.path.join(root_dir, "soft_seg_labels", file + ".npy") for file in files]
         self.gt_labels_hard = [os.path.join(root_dir, "pose_hard_labels", file + ".npy") for file in files]
         self.gt_labels_soft = [os.path.join(root_dir, "pose_soft_labels", file + ".npy") for file in files]
 
@@ -105,6 +105,8 @@ class UPBDataset(Dataset):
         # read the roi
         if self.roi:
             roi_map_path = self.roi_data[idx]
+            roi_map = np.load(roi_map_path)
+        else:
             roi_map = None
         
         # read ground truth turning radius
@@ -118,8 +120,8 @@ class UPBDataset(Dataset):
             np_img = np.asarray(img)
             
             # augment with a predefined tx and ry
-            np_img, R, course = PerspectiveAugmentator.augment(
-                reader=self.reader, frame=np_img, R=R,
+            np_img, roi_map, R, course = PerspectiveAugmentator.augment(
+                reader=self.reader, frame=np_img, roi_map=roi_map, R=R,
                 speed=data["speed"], frame_rate=data["frame_rate"],
                 transf=self.synth_buff[idx]
             )
@@ -131,16 +133,14 @@ class UPBDataset(Dataset):
             else:
                 color_aug = (lambda x: x)
 
-            print(color_aug, 'aaa')
-
             # read image & perform color augmentation
             img = color_aug(img)
             np_img = np.asarray(img)
 
             # perform perspective augmentation
             if do_paug:
-                np_img, R, course = PerspectiveAugmentator.augment(
-                    reader=self.reader, frame=np_img, R=R,
+                np_img, roi_map, R, course = PerspectiveAugmentator.augment(
+                    reader=self.reader, frame=np_img, roi_map=roi_map, R=R,
                     speed=data["speed"], frame_rate=data["frame_rate"]
                 )
 
@@ -148,10 +148,19 @@ class UPBDataset(Dataset):
         np_img = self.reader.crop_car(np_img)
         np_img = self.reader.crop_center(np_img)
         # np_img = self.reader.resize_img(np_img)
+
+        # process roi map
+        roi_map = self.reader.crop_car(roi_map)
+        roi_map = self.reader.crop_center(roi_map)
+        # roi_map = self.reader.resize_img(roi_map)
         
         # transpose to [C, H, W] and normalize to [0, 1]
         np_img = np_img.transpose(2, 0, 1)
         np_img = normalize(np_img)
+
+        roi_map = normalize_roi(roi_map)
+        roi_map = roi_map[:, :, None]
+        roi_map = roi_map.transpose(2, 0, 1)
         
         # construct gaussian distribution
         # maximum  1/R = 1/5 = 0.2
@@ -169,8 +178,8 @@ class UPBDataset(Dataset):
             "turning": torch.tensor(turning).float(),
             #"turning_pmf": torch.tensor(pmf_course).float(),
             #"turning": torch.tensor(course).float(),
-            "speed": torch.tensor(data["speed"]).unsqueeze(0).float()
-
+            "speed": torch.tensor(data["speed"]).unsqueeze(0).float(),
+            "roi": torch.tensor(roi_map).float()
         }
 
 

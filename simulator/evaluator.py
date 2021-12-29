@@ -118,6 +118,12 @@ class AugmentationEvaluator:
             frame = self.reader.resize_img(frame)
         return frame
 
+    def force_process_frame(self, frame):
+        frame = self.reader.crop_car(frame)
+        frame = self.reader.crop_center(frame)
+        frame = self.reader.resize_img(frame)
+        return frame
+
     def step(self, pred_turning=0.):
         """
         :param predicted_course: predicted course by nn in degrees

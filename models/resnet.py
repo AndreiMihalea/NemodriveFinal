@@ -20,7 +20,7 @@ class RESNET(nn.Module):
         
         # construct encoder
         rnet = models.resnet18(pretrained=True)
-        conv1 = nn.Conv2d(self.input_channels, rnet.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        conv1 = nn.Conv2d(self.input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.encoder = nn.Sequential(
             conv1,
             rnet.bn1,
@@ -33,7 +33,7 @@ class RESNET(nn.Module):
 
         # construct encoder for rgb input
         rnet_input = models.resnet18(pretrained=True)
-        conv1_input = nn.Conv2d(self.input_channels, rnet_input.inplanes, kernel_size=7, stride=2, padding=3,
+        conv1_input = nn.Conv2d(self.input_channels, 64, kernel_size=7, stride=2, padding=3,
                                 bias=False)
         self.encoder_input = nn.Sequential(
             conv1_input,
@@ -41,7 +41,7 @@ class RESNET(nn.Module):
         )
 
         # construct encoder for roi
-        self.encoder_roi = nn.Conv2d(1, rnet_input.inplanes, kernel_size=7, stride=2, padding=3, bias=True)
+        self.encoder_roi = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=True)
         self.encoder_roi.bias.data = torch.ones(self.encoder_roi.bias.data.shape)
         self.encoder_roi.weight.data = torch.zeros(self.encoder_roi.weight.data.shape)
 
@@ -87,6 +87,9 @@ class RESNET(nn.Module):
             roi = self.encoder_roi(roi)
             input = input * roi
             input = self.encoder_input_roi(input)
+        elif self.use_roi == 'input':
+            input = torch.cat([img, roi], dim=1)
+            input = self.encoder(input)
         else:
             input = self.encoder(img)
         

@@ -306,8 +306,10 @@ if __name__ == "__main__":
 
     # define experiment name
     if args.use_roi:
-        experiment = os.path.join('{}_{}'.format(args.use_roi, args.roi_map),
-                                  str(len(os.listdir(args.vis_dir))).zfill(5))
+        experiment = os.path.join('{}_{}'.format(args.use_roi, args.roi_map))
+        if not os.path.exists(os.path.join(args.vis_dir, experiment)):
+            os.makedirs(os.path.join(args.vis_dir, experiment))
+        experiment = os.path.join(experiment, str(len(os.listdir(os.path.join(args.vis_dir, experiment)))).zfill(5))
     else:
         experiment = str(len(os.listdir(args.vis_dir))).zfill(5)
 
