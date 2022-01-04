@@ -99,7 +99,7 @@ def normalize(img):
 
 
 def normalize_roi(roi_map):
-    return (roi_map - np.min(roi_map)) / (np.ptp(roi_map) + 1e-5)
+    return (roi_map - np.min(roi_map)) / (np.ptp(roi_map) + 1e-4)
 
 
 def unnormalize(img):

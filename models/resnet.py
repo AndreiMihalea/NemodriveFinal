@@ -22,7 +22,7 @@ class RESNET(nn.Module):
         rnet = models.resnet18(pretrained=True)
         conv1 = nn.Conv2d(self.input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.encoder = nn.Sequential(
-            conv1,
+            rnet.conv1,
             rnet.bn1,
             rnet.maxpool,
             rnet.layer1,

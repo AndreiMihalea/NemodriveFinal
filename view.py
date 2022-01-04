@@ -9,8 +9,8 @@ from tqdm import tqdm
 from util.road_map import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dst_dir", type=str, default="./results")
-parser.add_argument("--sim_dir", type=str, default="./simulation")
+parser.add_argument("--dst_dir", type=str, default="./results_pose/")
+parser.add_argument("--sim_dir", type=str, default="/mnt/storage/workspace/andreim/nemodrive/experiments_robert/simulation_pose/")
 parser.add_argument("--time_penalty", type=int, default=6)
 parser.add_argument("--map_name", type=str, default="./map/high_res_full_UPB_standard.png")
 parser.add_argument("--csv_name", type=str, default="./map/high_Res_full_UPB_standard.csv")
@@ -24,6 +24,7 @@ if __name__ == "__main__":
         # get list of videos
         videos_path = os.path.join(args.sim_dir, expr)
         videos = os.listdir(videos_path)
+        print(videos)
 
         # create plotter 
         plot = UPB_Map(map_name=args.map_name, csv_name=args.csv_name)
@@ -54,8 +55,8 @@ if __name__ == "__main__":
             distances += list(itertools.chain.from_iterable(data['statistics']['distances']))
             angles += list(itertools.chain.from_iterable(data['statistics']['angles']))
             steps2interv += [len(x) for x in data['statistics']['distances']]
-            northing += data['intervention_coords']['northing']
-            easting += data['intervention_coords']['easting']
+            #northing += data['intervention_coords']['northing']
+            #easting += data['intervention_coords']['easting']
 
         # convert to numpy array
         northing = np.array(northing)

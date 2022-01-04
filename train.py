@@ -57,7 +57,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0, help="seed")
     parser.add_argument("--scale", type=float, default=1.0, help="scaling factor for the radius")
     # segmentation roi arguments
-    parser.add_argument("--use_roi", choices=['input', 'features'], help="use path region of interest as input")
+    parser.add_argument("--use_roi", choices=['none', 'input', 'features'], help="use path region of interest as input")
     parser.add_argument("--roi_map", choices=['seg_hard', 'seg_soft', 'gt_hard', 'gt_soft'], default='seg_soft',
                         help="use path region of interest as input")
     args = parser.parse_args()

@@ -73,7 +73,7 @@ def get_args() -> argparse.Namespace:
                         help='dataset name (default: pascal_voc)')
     parser.add_argument('--aux', action='store_true', default=False,
                         help='Auxiliary loss')
-    parser.add_argument("--use_roi", choices=['input', 'features'], help="use path region of interest as input")
+    parser.add_argument("--use_roi", choices=['none', 'input', 'features'], help="use path region of interest as input")
     parser.add_argument("--roi_map", choices=['seg_hard', 'seg_soft', 'gt_hard', 'gt_soft'], default='seg_soft',
                         help="use path region of interest as input")
     parser.add_argument('--local_rank', type=int, default=0)
@@ -203,10 +203,10 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     """ Close loop evaluation of a video """
 
     scene = metadata.split('.')[0]
-    log_path = os.path.join(args.sim_dir, args.load_model, scene)
-    if not os.path.exists(log_path):
-        os.makedirs(log_path)
-        os.makedirs(os.path.join(log_path, "imgs"))
+    save_dir = os.path.join(args.sim_dir, args.use_roi, args.roi_map, args.load_model, scene)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+        os.makedirs(os.path.join(save_dir, "imgs"))
 
     # buffers to store evaluation details
     turnings = []
@@ -325,7 +325,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
                 # construct full image
                 turning_distribution = torch.tensor(turning_distribution).unsqueeze(0)
-                imgs_path = os.path.join(args.sim_dir, args.load_model, scene, "imgs", str(idx).zfill(5) + ".png")
+                imgs_path = os.path.join(save_dir, "imgs", str(idx).zfill(5) + ".png")
                 full_img = visualisation(process_frame(frame), turning_distribution, toutput,
                                          1, imgs_path).astype(np.uint8)
             else:
@@ -353,11 +353,11 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     absolute_mean_distance, absolute_mean_angle, plot_dist_ang = plot_statistics(statistics)
 
     # save stats plot
-    stats_path = os.path.join(args.sim_dir, args.load_model, scene, "stats.png")
+    stats_path = os.path.join(save_dir, "stats.png")
     cv2.imwrite(stats_path, plot_dist_ang[..., ::-1])
 
     # trajecories plot
-    trajectories_path = os.path.join(args.sim_dir, args.load_model, scene, "trajectories.png")
+    trajectories_path = os.path.join(save_dir, "trajectories.png")
     trajectories_plot = plot_trajectories(augm.get_trajectories(), augm.get_confidence())
     cv2.imwrite(trajectories_path, trajectories_plot)
 
@@ -374,7 +374,9 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         "intervention_coords": augm.get_intervention_points()
     }
 
-    data_path = os.path.join(args.sim_dir, args.load_model, scene, "data.pkl")
+    print(data)
+
+    data_path = os.path.join(save_dir, "data.pkl")
     with open(data_path, 'wb') as fout:
         pkl.dump(data, fout)
 

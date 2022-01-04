@@ -10,7 +10,7 @@ OPTIMIZER=sgd
 
 VIS_INT=100
 LOG_INT=25
-DATASET_DIR=./dataset
+DATASET_DIR=/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/dataset_paper/
 SEED=13
 export CUDA_VISIBLE_DEVICES=1
 
@@ -66,6 +66,8 @@ python train.py \
  	--seed $SEED \
  	--use_augm \
  	--scale 1.0 \
+ 	--use_roi features \
+ 	--roi_map seg_soft
 
 
 ## train model using 2D persepctive augmentation

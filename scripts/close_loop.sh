@@ -7,12 +7,12 @@
 BEGIN=0
 END=81
 MODEL=resnet
-LOAD_MODEL=00001
+LOAD_MODEL=00000
 SPLIT_PATH=data_split/test_scenes.txt
 DATA_PATH=/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/old_dataset
-SIM_DIR=simulation_scale
-ROI=features
-ROI_MAP=seg_soft
+SIM_DIR=simulation_pose
+ROI=none
+ROI_MAP=gt_soft
 
 python close_loop.py \
 	--begin $BEGIN \

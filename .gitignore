@@ -9,5 +9,7 @@ snapshots_pose
 *.pyc
 __pycache__/
 
-simulation_scale/
-
+*snapshots*
+*simulation*/
+*results*/
+onnx_models/

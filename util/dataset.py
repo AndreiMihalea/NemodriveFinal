@@ -161,6 +161,7 @@ class UPBDataset(Dataset):
         roi_map = normalize_roi(roi_map)
         roi_map = roi_map[:, :, None]
         roi_map = roi_map.transpose(2, 0, 1)
+        roi_map = np.nan_to_num(roi_map)
         
         # construct gaussian distribution
         # maximum  1/R = 1/5 = 0.2
