@@ -11,8 +11,6 @@ def fig2data(fig):
     @param fig a matplotlib figure
     @return a numpy 3D array of RGBA values
     """
-    import matplotlib
-    matplotlib.use('Agg')
 
     # draw the renderer
     fig.canvas.draw()
@@ -29,8 +27,6 @@ def fig2img(fig, width, height):
     @param fig a matplotlib figure
     @return a Python Imaging Library ( PIL ) image
     """
-    import matplotlib
-    matplotlib.use('Agg')
 
     # put the figure pixmap into a numpy array
     buf = fig2data(fig)

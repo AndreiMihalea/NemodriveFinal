@@ -15,9 +15,9 @@ VIS_INT=100
 LOG_INT=25
 VIS_DIR=snapshots_pose
 LOG_DIR=logs_pose
-DATASET_DIR=./dataset
+DATASET_DIR=/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/dataset_paper/
 
-export CUDA_VISIBLE_DEVICES=1
+# export CUDA_VISIBLE_DEVICES=1
 
 
 # train model using 2D perspectiv agumentation and data balancing

@@ -24,6 +24,8 @@ class RESNET(nn.Module):
             rnet.layer3,
             rnet.layer4,
         )
+
+        print(rnet.conv1)
         
         # adaptive avg pool
         self.avgpool = nn.AdaptiveAvgPool2d(output_size=(1, 1))

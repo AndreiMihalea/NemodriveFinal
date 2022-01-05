@@ -264,7 +264,8 @@ if __name__ == "__main__":
 
     # load model
     if not args.use_baseline:
-        path = os.path.join("snapshots", args.load_model, "ckpts", "default.pth")
+        path = os.path.join("snapshots_pose", args.load_model, "ckpts", "default.pth")
+        print(path)
         load_ckpt(path, [('model', model)])
         model.eval()
 

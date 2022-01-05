@@ -1,6 +1,9 @@
-dataset
-logs
-results
-simulation
-snapshots
+dataset/
+*logs*/
+*results*/
+*simulation*/
+*snapshots*/
+*pyc
+__pycache__/
+onnx_models/
 

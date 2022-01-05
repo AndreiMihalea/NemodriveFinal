@@ -107,7 +107,7 @@ class UPBDataset(Dataset):
         else:
             # color augmentation object
             if do_aug and self.train:
-                color_aug = transforms.ColorJitter.get_params(
+                color_aug = transforms.ColorJitter(
                     self.brightness, self.contrast, self.saturation, self.hue)
             else:
                 color_aug = (lambda x: x)
