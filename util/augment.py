@@ -107,9 +107,8 @@ class PerspectiveAugmentator(object):
         return output
 
     @staticmethod
-    def augment(reader: Reader, frame: np.ndarray, R: float,
-            speed: float,  frame_rate: int=3, 
-            transf: Tuple[float, float] = None) -> Tuple[np.ndarray, float]:
+    def augment(reader: Reader, frame: np.ndarray, roi_map: np.ndarray, R: float, speed: float,  frame_rate: int=3,
+            transf: Tuple[float, float] = None) -> Tuple[np.ndarray, np.ndarray, float, float]:
         """
         Augments a given image with the corresponding command
         by sampling at random the translation and the rotation
@@ -120,6 +119,8 @@ class PerspectiveAugmentator(object):
             JSON reader for the UPB dataset
         frame
             image to be augmented
+        roi_map
+            region of interest to be augmented
         R
             turning radius
         speed
@@ -163,6 +164,18 @@ class PerspectiveAugmentator(object):
         # generate augmented image
         aug_img = PerspectiveAugmentator.pipeline(
             reader=reader, img=frame, tx=tx, ry=ry)
+
+        if roi_map is not None:
+            aug_roi_map = PerspectiveAugmentator.pipeline(
+                reader=reader, img=roi_map, tx=tx, ry=ry)
+        else:
+            aug_roi_map = None
+
+        # cv2.imshow('roi', np.concatenate((roi_map, aug_roi_map)))
+        # cv2.waitKey(0)
+
+        # cv2.imshow('frame', np.concatenate((frame, aug_img)))
+        # cv2.waitKey(0)
         
         # generate augmented steering command
         aug_steer, _, aug_R, _ = PerspectiveAugmentator.compute_command(
@@ -174,4 +187,4 @@ class PerspectiveAugmentator(object):
         # compute augmentation course
         aug_course = steering.get_course_from_steer(aug_steer, speed, dt)
 
-        return aug_img, aug_R, aug_course
+        return aug_img, aug_roi_map, aug_R, aug_course

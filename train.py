@@ -384,6 +384,16 @@ if __name__ == "__main__":
                 best_scores=[('best_score', best_score)],
                 n_iter=epoch + 1
             )
+            ckpt_name = os.path.join(args.vis_dir, experiment, "ckpts", "default.pth")
+            save_ckpt(
+                ckpt_name,
+                models=[('model', model)],
+                optimizers=[('optimizer', optimizer)],
+                schedulers=[('scheduler', scheduler)],
+                rlosses=[('rloss', rloss)],
+                best_scores=[('best_score', best_score)],
+                n_iter=epoch + 1
+            )
             print("Model saved!")
 
         # learning rate scheduler step
