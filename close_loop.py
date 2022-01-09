@@ -12,14 +12,34 @@ from tqdm import tqdm
 
 import torch.nn
 import torch.nn.functional as F
+from torchvision import transforms
 
 from util.reader import JSONReader
 from simulator.evaluator import AugmentationEvaluator
 from simulator.plots import *
 
 import util.vis as vis
-from util.vis import gaussian_dist, normalize, unnormalize
+from util.vis import gaussian_dist, normalize, unnormalize, normalize_with_neg
 from typing import Tuple
+
+import sys
+
+import matplotlib
+matplotlib.use('TkAgg')
+
+sys.path.insert(1, '/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch')
+
+from core.data.dataloader import get_segmentation_dataset
+from core.models.model_zoo import get_segmentation_model
+from core.utils.score import SegmentationMetric
+from core.utils.visualize import get_color_pallete
+from core.utils.logger import setup_logger
+from core.utils.distributed import synchronize, get_rank, make_data_sampler, make_batch_data_sampler
+
+segmentation_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
+])
 
 
 def get_args() -> argparse.Namespace:
@@ -33,8 +53,41 @@ def get_args() -> argparse.Namespace:
     parser.add_argument('--data_path', type=str, help='path to the directory of raw dataset (.mov & .json)')
     parser.add_argument('--sim_dir', type=str, help='simulation directory', default='simulation')
     parser.add_argument('--use_baseline', action='store_true', help='predict 0 degrees always')
+    # segmentation arguments
+    parser.add_argument('--model', type=str, default='fcn',
+                        choices=['fcn32s', 'fcn16s', 'fcn8s',
+                                 'fcn', 'psp', 'deeplabv3', 'deeplabv3_plus',
+                                 'danet', 'denseaspp', 'bisenet',
+                                 'encnet', 'dunet', 'icnet',
+                                 'enet', 'ocnet', 'ccnet', 'psanet',
+                                 'cgnet', 'espnet', 'lednet', 'dfanet'],
+                        help='model name (default: fcn32s)')
+    parser.add_argument('--backbone', type=str, default='resnet50',
+                        choices=['vgg16', 'resnet18', 'resnet50',
+                                 'resnet101', 'resnet152', 'densenet121',
+                                 'densenet161', 'densenet169', 'densenet201'],
+                        help='backbone name (default: vgg16)')
+    parser.add_argument('--dataset', type=str, default='pascal_voc',
+                        choices=['pascal_voc', 'pascal_aug', 'ade20k',
+                                 'citys', 'sbu', 'upb', 'kitti'],
+                        help='dataset name (default: pascal_voc)')
+    parser.add_argument('--aux', action='store_true', default=False,
+                        help='Auxiliary loss')
+    parser.add_argument("--use_roi", choices=['none', 'input', 'features'], help="use path region of interest as input")
+    parser.add_argument("--roi_map", choices=['seg_hard', 'seg_soft', 'gt_hard', 'gt_soft'], default='seg_soft',
+                        help="use path region of interest as input")
+    parser.add_argument('--local_rank', type=int, default=0)
     args = parser.parse_args()
     return args
+
+
+def get_segmentation_network():
+    BatchNorm2d = nn.BatchNorm2d
+    model = get_segmentation_model(model=args.model, dataset=args.dataset, backbone=args.backbone,
+                                   aux=args.aux, pretrained=True, pretrained_base=False,
+                                   local_rank=args.local_rank,
+                                   norm_layer=BatchNorm2d).to(device)
+    return model
 
 
 def set_seed(seed: int = 0):
@@ -96,7 +149,7 @@ def get_turning(output, smooth=True) -> Tuple[float, np.ndarray]:
     return (index - 200) / 1000, output
 
 
-def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tensor]:
+def make_prediction(frame: np.ndarray, roi_map: np.ndarray, speed: float) -> Tuple[float, torch.tensor]:
     """
     Make prediction given the current observation
 
@@ -104,6 +157,8 @@ def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tenso
     ----------
     frame
         RGB observation
+    roi_map
+        region of interest to feed to the network
     speed
         current speed in [m/s]
 
@@ -115,6 +170,7 @@ def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tenso
     # preprocess data
     frame = process_frame(frame)
     speed = torch.tensor([[speed]]).to(device)
+    roi_map = torch.tensor(roi_map).unsqueeze(0).unsqueeze(0)
 
     # make first prediction
     with torch.no_grad():
@@ -122,6 +178,7 @@ def make_prediction(frame: np.ndarray, speed: float) -> Tuple[float, torch.tenso
         data = {
             "img": frame.to(device),
             "speed": speed.to(device),
+            "roi": roi_map.to(device)
         }
 
         # make prediction based on frame
@@ -144,6 +201,9 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
     """ Close loop evaluation of a video """
 
+    segmentation_model = get_segmentation_network()
+    segmentation_model.eval()
+
     scene = metadata.split('.')[0]
     log_path = os.path.join(args.sim_dir, args.load_model, scene)
     if not os.path.exists(log_path):
@@ -159,6 +219,7 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
     # initialize reader
     reader = JSONReader(root_dir=root_dir, json_file=metadata, frame_rate=3)
+    reader_seg = JSONReader(root_dir=root_dir, json_file=metadata, frame_rate=3)
 
     # initialize evaluators
     # check multiple parameters like time_penalty, distance threshold and angle threshold
@@ -170,18 +231,53 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
         rotation_threshold=rotation_threshold
     )
 
+    augm_seg = AugmentationEvaluator(
+        reader=reader_seg,
+        time_penalty=time_penalty,
+        translation_threshold=translation_threshold,
+        rotation_threshold=rotation_threshold,
+        process_input = False
+    )
+
     # get first two frames of the video and make a prediction
     frame, speed, turning, interv = augm.reset()
+    frame_seg, _, _, _ = augm_seg.reset()
 
     with torch.no_grad():
         for idx in itertools.count():
             # video is done
             if frame.size == 0:
                 break
-            
+
+            # segmentation of the current frame
+            current_frame_seg = frame_seg.copy()
+            current_frame_seg = cv2.cvtColor(current_frame_seg, cv2.COLOR_BGR2RGB)
+            current_frame_seg = segmentation_transform(current_frame_seg).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                # print(segmentation_model(current_frame_seg)[0].shape)
+                roi_map = (segmentation_model(current_frame_seg)[0][0][0]).cpu().numpy()
+                # roi_map[roi_map > 0.35] = 1
+                # roi_map[roi_map != 1] = 0
+                output = segmentation_model(current_frame_seg)
+
+            roi_map = augm_seg.force_process_frame(roi_map)
+            # roi_map = normalize_with_neg(roi_map)
+
+            # if 'hard' in args.roi_map:
+            #     pred = 1 - torch.argmax(output[0], 1).squeeze(0).cpu().data.numpy()
+            #     pred = augm_seg.force_process_frame(pred)
+            #     # print(pred.shape)
+            #     # plt.imshow(pred)
+            #     # plt.colorbar()
+            #     # plt.show()
+            #     roi_map = pred
+
+
             # make prediction
-            pred_turning, toutput = make_prediction(frame, speed)
+            pred_turning, toutput = make_prediction(frame, roi_map, speed)
             next_frame, next_speed, next_turning, interv = augm.step(pred_turning)
+            next_frame_seg, _, _, _ = augm_seg.step(pred_turning)
             
             if not interv:
                 # distribution for the ground truth course
@@ -199,34 +295,36 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
                 # construct full image
                 turning_distribution = torch.tensor(turning_distribution).unsqueeze(0)
                 imgs_path = os.path.join(args.sim_dir, args.load_model, scene, "imgs", str(idx).zfill(5) + ".png")
-                full_img = visualisation(process_frame(frame), turning_distribution, toutput,
-                                         1, imgs_path).astype(np.uint8)
+                # full_img = visualisation(process_frame(frame), turning_distribution, toutput,
+                #                          1, imgs_path).astype(np.uint8)
             else:
                 # signla intervention by a blank screen
+                pass
                 full_img = np.zeros((vis.HEIGHT, 2 * vis.WIDTH, 3)).astype(np.uint8)
 
             # save image
-            pil_snapshot = pil.fromarray(full_img.astype(np.uint8))
-            pil_snapshot.save(imgs_path)
+            # pil_snapshot = pil.fromarray(full_img.astype(np.uint8))
+            # pil_snapshot.save(imgs_path)
 
             if verbose:
-                    print("Pred_Turning: %.3f, Turning: %.3f, Speed: %.2f" % (pred_turning, turning, speed))
-                    print("%.2f, %.2f" % (augm.simulator.distance, augm.simulator.angle))
-                    cv2.imshow("State", full_img[..., ::-1])
-                    cv2.waitKey(0)
+                print("Pred_Turning: %.3f, Turning: %.3f, Speed: %.2f" % (pred_turning, turning, speed))
+                print("%.2f, %.2f" % (augm.simulator.distance, augm.simulator.angle))
+                # cv2.imshow("State", full_img[..., ::-1])
+                # cv2.waitKey(0)
 
             # update frame
             frame = next_frame
+            frame_seg = next_frame_seg
             turning = next_turning
             speed = next_speed
 
     # get some statistics [mean distance till an intervention, mean angle till an intervention]
     statistics = augm.statistics
-    absolute_mean_distance, absolute_mean_angle, plot_dist_ang = plot_statistics(statistics)
+    #absolute_mean_distance, absolute_mean_angle, plot_dist_ang = plot_statistics(statistics)
 
     # save stats plot
     stats_path = os.path.join(args.sim_dir, args.load_model, scene, "stats.png")
-    cv2.imwrite(stats_path, plot_dist_ang[..., ::-1])
+    #cv2.imwrite(stats_path, plot_dist_ang[..., ::-1])
 
     # save all data
     data = {
@@ -258,7 +356,7 @@ if __name__ == "__main__":
 
     # define model
     nbins = 401
-    model = RESNET(no_outputs=nbins).to(device)
+    model = RESNET(no_outputs=nbins, use_roi=args.use_roi).to(device)
     # model = PilotNet(no_outputs=nbins).to(device)
     model = model.to(device)
 

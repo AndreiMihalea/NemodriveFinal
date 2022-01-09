@@ -16,6 +16,15 @@ from simulator.transformation import Crop
 from util.vis import gaussian_dist, normalize, normalize_with_neg
 
 
+def softmax(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0)
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+
 class UPBDataset(Dataset):
     def __init__(self, root_dir: str, train: bool = True, augm: bool = False,
             synth: bool = False, scale: float = 1.0, roi: str = 'seg_soft'):
@@ -105,7 +114,7 @@ class UPBDataset(Dataset):
         # read the roi
         if self.roi:
             roi_map_path = self.roi_data[idx]
-            roi_map = np.load(roi_map_path)
+            roi_map = np.sigmoid(np.load(roi_map_path))
         else:
             roi_map = None
 
@@ -137,6 +146,7 @@ class UPBDataset(Dataset):
             # read image & perform color augmentation
             img = color_aug(img)
             np_img = np.asarray(img)
+            np_roi_map = roi_map.copy()
 
             # perform perspective augmentation
             if do_paug:
@@ -156,7 +166,7 @@ class UPBDataset(Dataset):
         # process roi map
         np_roi_map = self.reader.crop_car(np_roi_map)
         np_roi_map = self.reader.crop_center(np_roi_map)
-        # roi_map = self.reader.resize_img(roi_map)
+        np_roi_map = self.reader.resize_img(np_roi_map)
         np_roi_map = normalize_with_neg(np_roi_map)
         np_roi_map = np_roi_map[:, :, None]
         np_roi_map = np_roi_map.transpose(2, 0, 1)
@@ -179,7 +189,7 @@ class UPBDataset(Dataset):
             #"turning_pmf": torch.tensor(pmf_course).float(),
             #"turning": torch.tensor(course).float(),
             "speed": torch.tensor(data["speed"]).unsqueeze(0).float(),
-            "roi": torch.tensor(roi_map).float()
+            "roi": torch.tensor(np_roi_map).float()
         }
 
 

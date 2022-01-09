@@ -9,8 +9,8 @@ from tqdm import tqdm
 from util.road_map import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dst_dir", type=str, default="./results_pose/none/gt_soft/")
-parser.add_argument("--sim_dir", type=str, default="./simulation_pose/none/gt_soft/")
+parser.add_argument("--dst_dir", type=str, default="./results_pose/")
+parser.add_argument("--sim_dir", type=str, default="./simulation_pose/")
 parser.add_argument("--time_penalty", type=int, default=6)
 parser.add_argument("--map_name", type=str, default="./map/high_res_full_UPB_standard.png")
 parser.add_argument("--csv_name", type=str, default="./map/high_Res_full_UPB_standard.csv")

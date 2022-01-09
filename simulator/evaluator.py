@@ -8,7 +8,8 @@ from util.reader import Reader, JSONReader
 
 
 class AugmentationEvaluator:
-    def __init__(self, reader: Reader, translation_threshold=1.5, rotation_threshold=0.2, time_penalty=6, frame_rate=3):
+    def __init__(self, reader: Reader, translation_threshold=1.5, rotation_threshold=0.2, time_penalty=6, frame_rate=3,
+                 process_input=True):
         """
         :param json: path to json file
         :param translation_threshold: translation threshold on OX axis
@@ -21,6 +22,7 @@ class AugmentationEvaluator:
         self.time_penalty = time_penalty
         self.frame_rate = frame_rate
         self.frame_idx = 0
+        self.process_input = process_input
 
         # initialize simulator
         self.simulator = simulator.Simulator(
@@ -92,8 +94,15 @@ class AugmentationEvaluator:
         return frame, speed, turning, False
 
     def process_frame(self, frame):
+        if self.process_input:
+            frame = self.reader.crop_car(frame)
+            frame = self.reader.crop_center(frame)
+            frame = self.reader.resize_img(frame)
+        return frame
+
+    def force_process_frame(self, frame):
         frame = self.reader.crop_car(frame)
-        frame = self.reader.crop_center(frame)
+        frame = self.reader.crop_center(frame).astype('float32')
         frame = self.reader.resize_img(frame)
         return frame
 

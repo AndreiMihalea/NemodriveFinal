@@ -56,6 +56,10 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--weight_decay", type=float, default=0, help="weight decay optimizer")
     parser.add_argument("--seed", type=int, default=0, help="seed")
     parser.add_argument("--scale", type=float, default=1.0, help="scaling factor for the radius")
+    # segmentation roi arguments
+    parser.add_argument("--use_roi", choices=['none', 'input', 'features'], help="use path region of interest as input")
+    parser.add_argument("--roi_map", choices=['seg_hard', 'seg_soft', 'gt_hard', 'gt_soft'], default='seg_soft',
+                        help="use path region of interest as input")
     args = parser.parse_args()
     return args
 
@@ -96,7 +100,7 @@ def compile(args: argparse.Namespace) -> Tuple:
 
     # define model
     nbins=401
-    model = RESNET(no_outputs=nbins).to(device)
+    model = RESNET(no_outputs=nbins, use_roi=args.use_roi).to(device)
     # model = Simple(no_outputs=nbins).to(device)
     # model= PilotNet(no_outputs=nbins).to(device)
 
@@ -233,6 +237,18 @@ def run_epoch(dataloader, epoch, train_flag=True, synth_flag=False):
             index = epoch * (len(train_dataset) // args.batch_size) + i
             writer.add_scalar("loss", loss.item(), index)            
             writer.flush()
+
+            if i == args.log_interval:
+                ckpt_name = os.path.join(args.vis_dir, experiment, "ckpts", "test.pth")
+                save_ckpt(
+                    ckpt_name,
+                    models=[('model', model)],
+                    optimizers=[('optimizer', optimizer)],
+                    schedulers=[('scheduler', scheduler)],
+                    rlosses=[('rloss', rloss)],
+                    best_scores=[('best_score', best_score)],
+                    n_iter=epoch + 1
+                )
 
         # visualization
         if i % args.vis_interval == 0:
