@@ -21,11 +21,16 @@ from simulator.plots import *
 import util.vis as vis
 from util.vis import gaussian_dist, normalize, unnormalize, normalize_with_neg
 from typing import Tuple
+from scipy.signal import find_peaks
+
+from util.car_utils import get_radius, WHEEL_STEER_RATIO, render_path, render_path_lines
+from util.segmentation_utils import compute_score, compute_miou
 
 import sys
 
 import matplotlib
 matplotlib.use('TkAgg')
+import seaborn as sns
 
 sys.path.insert(1, '/home/nemodrive/workspace/andreim/awesome-semantic-segmentation-pytorch')
 
@@ -243,6 +248,12 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
     frame, speed, turning, interv = augm.reset()
     frame_seg, _, _, _ = augm_seg.reset()
 
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (51, 51))
+
+    num = 501
+    MAX_STEER = 500
+    angles = np.linspace(-MAX_STEER, MAX_STEER, num)
+
     with torch.no_grad():
         for idx in itertools.count():
             # video is done
@@ -256,28 +267,133 @@ def test_video(root_dir: str, metadata: str, time_penalty=6,
 
             with torch.no_grad():
                 # print(segmentation_model(current_frame_seg)[0].shape)
-                roi_map = (segmentation_model(current_frame_seg)[0][0][0]).cpu().numpy()
-                # roi_map[roi_map > 0.35] = 1
-                # roi_map[roi_map != 1] = 0
                 output = segmentation_model(current_frame_seg)
+                roi_map = nn.Sigmoid()(output[0][0][0]).cpu().numpy()
+                for _ in range(1):
+                    roi_map = cv2.morphologyEx(roi_map, cv2.MORPH_CLOSE, kernel)
+                # roi_map[roi_map > 0.001] = 1
+                # roi_map[roi_map != 1] = 0
+                # roi_map = cv2.morphologyEx(roi_map, cv2.MORPH_OPEN, kernel)
+                # plt.imshow(roi_map)
+                # plt.show()
+                # aug_roi_map_weight = np.stack([roi_map] * 3).transpose((1, 2, 0)).astype(float)
+                # aug_roi_map_weight[:, :, 0] = 0
+                # aug_roi_map_weight[:, :, 2] = 0
+                # frame_roi = cv2.addWeighted(frame_seg.astype(float), 1, aug_roi_map_weight * 255., 0.5, 0)
+                # cv2.imshow('img', frame_roi/255.)
+                # cv2.waitKey(0)
+
 
             roi_map = augm_seg.force_process_frame(roi_map)
-            # roi_map = normalize_with_neg(roi_map)
+            roi_map = normalize_with_neg(roi_map)
 
-            # if 'hard' in args.roi_map:
-            #     pred = 1 - torch.argmax(output[0], 1).squeeze(0).cpu().data.numpy()
-            #     pred = augm_seg.force_process_frame(pred)
-            #     # print(pred.shape)
-            #     # plt.imshow(pred)
-            #     # plt.colorbar()
-            #     # plt.show()
-            #     roi_map = pred
+            if 'hard' in args.roi_map:
+                pred = 1 - torch.argmax(output[0], 1).squeeze(0).cpu().data.numpy()
+                pred = augm_seg.force_process_frame(pred)
+                # print(pred.shape)
+                # plt.imshow(pred)
+                # plt.colorbar()
+                # plt.show()
+                # roi_map = pred
 
 
             # make prediction
             pred_turning, toutput = make_prediction(frame, roi_map, speed)
-            next_frame, next_speed, next_turning, interv = augm.step(pred_turning)
-            next_frame_seg, _, _, _ = augm_seg.step(pred_turning)
+
+            noutput = toutput.cpu().numpy()[0]
+            peaks, _ = find_peaks(noutput, height=0.005, distance=10)
+
+            max_score = 0
+            best_peak = 0
+
+            image_ackermann = frame_seg.copy()
+
+            image = frame_seg.copy()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = segmentation_transform(image).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                outputs = segmentation_model(image)
+
+            logits = nn.Sigmoid()(outputs[0][0][0]).cpu().data.numpy()
+            for _ in range(1):
+                logits = cv2.morphologyEx(logits, cv2.MORPH_CLOSE, kernel)
+            logits_og = logits.copy()
+
+            logits[logits > 0.35] = 1
+            logits[logits != 1] = 0
+
+            mask_overlay = np.array(logits)
+            mask_overlay = np.array([mask_overlay] * 3)
+            mask_overlay[mask_overlay != 0] = 255
+            mask_overlay[mask_overlay != 255] = 0
+
+
+            # img = cv2.resize(img, (832, 256))[:, 96:-96, :]
+            # print(img.shape, mask_overlay.shape)
+            # res_img = cv2.addWeighted(mask_overlay.transpose((1, 2, 0)).astype(np.float32), 1., frame_segm.astype(np.float32), 1, 0)
+            # cv2.imshow('res', res_img / 255.0)
+            # cv2.waitKey(0)
+
+            for peak in angles:#peaks: # peaks if only want to consider the distribution peaks (angles if want to consider all possibilities)
+                turning_seg = (peak - 200) / 1000
+                pred_steer = -augm.get_pred_steer(turning_seg)
+                # print(pred_steer, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
+                radius = get_radius(pred_steer / WHEEL_STEER_RATIO)
+
+                image_res, overlay = render_path(frame_seg, radius, augm.camera_position)
+                overlay_ackermann = overlay[:, :, 1] / overlay.max()
+                image_ackermann = render_path_lines(image_ackermann, radius, augm.camera_position)
+
+                miou = compute_miou(overlay_ackermann, mask_overlay)
+                soft_score = compute_score(overlay_ackermann, logits_og)
+
+                score = soft_score
+
+                if score > max_score:
+                    max_score = score
+                    best_peak = turning_seg
+
+            if len(peaks) > 1 and best_peak != pred_turning and abs(pred_turning - turning) > abs(best_peak - turning):
+                print(best_peak * 1000 + 200)
+                plt.figure(figsize=(6.4, 3.6), dpi=100)
+                plt.xlabel("Bin index")
+                plt.ylabel("Bin value")
+                # plt.gca().set_axis_off()
+                plt.subplots_adjust(left=0.135, bottom=0.135, right=0.99, top=0.99, wspace=0.1, hspace=0.1)
+                plt.margins(0.03, 0.03)
+                # plt.gca().xaxis.set_major_locator(plt.NullLocator())
+                # plt.gca().yaxis.set_major_locator(plt.NullLocator())
+                plt.plot([x for x in range(len(noutput))], noutput)
+                plt.plot(peaks, noutput[peaks], "x", mew=3, ms=10)
+                plt.show()
+                cv2.imshow("final", image_ackermann)
+                cv2.waitKey(0)
+                turning_seg = (best_peak - 200) / 1000
+                pred_steer = -augm.get_pred_steer(turning_seg)
+                radius = get_radius(pred_steer / WHEEL_STEER_RATIO)
+                image_res, overlay = render_path(frame_seg, radius, augm.camera_position)
+                heatmapshow = cv2.normalize(logits_og, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                heatmapshow = cv2.applyColorMap(heatmapshow, cv2.COLORMAP_HOT)
+                # cv2.imshow("final", np.concatenate((image_ackermann, heatmapshow)))
+                cv2.imshow("final", np.concatenate((cv2.cvtColor(image_ackermann, cv2.COLOR_BGR2RGB), heatmapshow)))
+                # cv2.imwrite('paper_files/seg_paths.png', np.concatenate((cv2.cvtColor(image_ackermann, cv2.COLOR_BGR2RGB), heatmapshow)))
+                # cv2.imwrite('paper_files/seg_paths_horizontal.png', np.concatenate((cv2.cvtColor(image_ackermann, cv2.COLOR_BGR2RGB), heatmapshow), axis=1))
+                # cv2.imwrite('paper_files/seg_paths_solo.png', cv2.cvtColor(image_ackermann, cv2.COLOR_BGR2RGB))
+                # cv2.imwrite('paper_files/seg_paths_heatmap.png', heatmapshow)
+                cv2.waitKey(0)
+                plt.figure(figsize=(6.4, 3.6), dpi=100)
+                plt.gca().set_axis_off()
+                plt.subplots_adjust(top=1, bottom=0, right=1, left=0,
+                                   hspace=0, wspace=0)
+                plt.margins(0, 0)
+                plt.gca().xaxis.set_major_locator(plt.NullLocator())
+                plt.gca().yaxis.set_major_locator(plt.NullLocator())
+                sns.heatmap(logits_og, cbar=False)
+                plt.show()
+
+            next_frame, next_speed, next_turning, interv = augm.step(best_peak)
+            next_frame_seg, _, _, _ = augm_seg.step(best_peak)
             
             if not interv:
                 # distribution for the ground truth course

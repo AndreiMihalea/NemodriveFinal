@@ -7,6 +7,8 @@ from simulator import transformation
 from .reader import Reader
 from typing import Tuple
 
+import cv2
+
 
 class PerspectiveAugmentator(object):
     @staticmethod
@@ -173,10 +175,31 @@ class PerspectiveAugmentator(object):
 
         # cv2.imshow('roi', np.concatenate((roi_map, aug_roi_map)))
         # cv2.waitKey(0)
-
+        #
         # cv2.imshow('frame', np.concatenate((frame, aug_img)))
         # cv2.waitKey(0)
-        
+
+        # roi_map = (roi_map - np.min(roi_map)) / (np.ptp(roi_map) + 1e-4)
+        # aug_roi_map = (aug_roi_map - np.min(aug_roi_map)) / (np.ptp(aug_roi_map) + 1e-4)
+        #
+        # frame = (frame - np.min(frame)) / (np.ptp(frame) + 1e-4)
+        # aug_img = (aug_img - np.min(aug_img)) / (np.ptp(aug_img) + 1e-4)
+        #
+        # roi_map_weight = np.stack([roi_map] * 3).transpose((1, 2, 0)).astype(float)
+        # roi_map_weight[:, :, 0] = 0
+        # roi_map_weight[:, :, 2] = 0
+        #
+        # aug_roi_map_weight = np.stack([aug_roi_map] * 3).transpose((1, 2, 0)).astype(float)
+        # aug_roi_map_weight[:, :, 0] = 0
+        # aug_roi_map_weight[:, :, 2] = 0
+        #
+        # frame_roi = cv2.addWeighted(frame.astype(float), 1, roi_map_weight, 0.5, 0)
+        # frame_roi_aug = cv2.addWeighted(aug_img.astype(float), 1, aug_roi_map_weight, 0.5, 0)
+        #
+        # cv2.imshow('frame', np.concatenate((frame_roi, frame_roi_aug)))
+        # cv2.waitKey(0)
+
+
         # generate augmented steering command
         aug_steer, _, aug_R, _ = PerspectiveAugmentator.compute_command(
             data=[steer, speed, dt],

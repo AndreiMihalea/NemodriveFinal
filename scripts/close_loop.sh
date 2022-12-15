@@ -4,15 +4,15 @@
 ################ OLD DATASET #########################################
 #####################################################################
 
-BEGIN=0
+BEGIN=6
 END=81
 MODEL=resnet
-LOAD_MODEL=00003
+LOAD_MODEL=00001
 SPLIT_PATH=data_split/test_scenes.txt
 DATA_PATH=/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/old_dataset
 SIM_DIR=simulation_pose
-ROI=features
-ROI_MAP=seg_soft
+ROI=none
+ROI_MAP=gt_hard
 
 python close_loop.py \
 	--begin $BEGIN \

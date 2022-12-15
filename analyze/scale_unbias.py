@@ -9,8 +9,8 @@ from tqdm import tqdm
 
 if __name__ == "__main__":
     # define paths
-    gt_path = "dataset/gt_dataset/"
-    pose_path = "dataset/pose_dataset/"
+    gt_path = "/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/dataset_paper/gt_dataset"
+    pose_path = "/mnt/storage/workspace/andreim/nemodrive/UPB_dataset_robert/dataset_paper/pose_dataset"
     
     # read train with scenes
     data_names = pd.read_csv(os.path.join(gt_path, "train_real.csv"))
@@ -56,6 +56,7 @@ if __name__ == "__main__":
     #loss = lambda x, y: np.abs(x - y)
 
     for scale in scales:
+        print(scale)
         l_arr = loss(
             np.clip(gt_curve, -0.2, 0.2),
             np.clip(1/scale * pose_curve, -0.2, 0.2)

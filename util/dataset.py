@@ -9,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import matplotlib.pyplot as plt
 import seaborn as sns; sns.set()
+import scipy.special
 
 from .reader import JSONReader
 from .augment import PerspectiveAugmentator
@@ -18,7 +19,7 @@ from util.vis import gaussian_dist, normalize, normalize_with_neg
 
 def softmax(x):
     e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=0)
+    return e_x / e_x.sum(axis=1)
 
 
 def sigmoid(x):
@@ -114,7 +115,7 @@ class UPBDataset(Dataset):
         # read the roi
         if self.roi:
             roi_map_path = self.roi_data[idx]
-            roi_map = np.sigmoid(np.load(roi_map_path))
+            roi_map = scipy.special.softmax(np.load(roi_map_path))
         else:
             roi_map = None
 

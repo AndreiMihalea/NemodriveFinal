@@ -3,7 +3,7 @@ dataset/
 *results*/
 *simulation*/
 *snapshots*/
-*pyc
+*.pyc
 __pycache__/
 onnx_models/
 

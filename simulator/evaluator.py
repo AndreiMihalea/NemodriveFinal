@@ -55,6 +55,14 @@ class AugmentationEvaluator:
         return self.interv_points
 
     @staticmethod
+    def get_pred_steer(pred_turning):
+        sgn = 1 if pred_turning >= 0 else -1
+        pred_R = sgn / (abs(pred_turning) + 1e-5)
+        pred_delta, _, _ = steering.get_delta_from_radius(pred_R)
+        pred_steer = steering.get_steer_from_delta(pred_delta)
+        return pred_steer
+
+    @staticmethod
     def get_relative_course(prev_course, crt_course):
         a = crt_course - prev_course
         a = (a + 180) % 360 - 180
@@ -82,6 +90,8 @@ class AugmentationEvaluator:
         return self.simulator.get_statistics()
 
     def reset(self):
+        self.camera_position = [0, 1.657, 1.542276316]
+
         self.packet = self.reader.get_next_image()
         frame, speed, rel_course = self.packet
         
